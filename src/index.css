@@ -1,0 +1,165 @@
+@import 'tailwindcss';
+
+/* ── Berdua theme tokens (Tailwind v4 @theme → utilities like bg-coral, font-script) ── */
+@theme {
+  --font-sans: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Fraunces', ui-serif, Georgia, serif;
+  --font-script: 'Caveat', ui-serif, cursive;
+
+  --color-cream: #fff6f0;
+  --color-cream-deep: #fbe9df;
+  --color-coral: #e8927c;
+  --color-coral-deep: #d87862;
+  --color-coral-soft: #e8b4a0;
+  --color-sage: #7c8a6f;
+  --color-sage-soft: #9ca77f;
+  --color-gold: #f2c879;
+  --color-ink: #3a2e2b;
+  --color-ink-soft: #6f615c;
+  --color-paper: #fffdfb;
+
+  --radius-card: 1.5rem;
+}
+
+:root {
+  color-scheme: light;
+}
+
+/* Cozy warm-dark theme — overrides the palette variables; accent (--color-coral) is set separately. */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --color-cream: #211c1a;
+  --color-cream-deep: #2f2825;
+  --color-paper: #2a2421;
+  --color-ink: #f3e9e2;
+  --color-ink-soft: #b3a59d;
+}
+
+[data-theme='dark'] .berdua-bg {
+  background:
+    radial-gradient(120% 60% at 50% -10%, #3a2e2b 0%, transparent 60%),
+    radial-gradient(80% 50% at 100% 100%, #2c2421 0%, transparent 55%),
+    var(--color-cream);
+}
+
+/* Pet habitat scene — warm by day, cozy-dark at night. */
+.pet-scene {
+  background: linear-gradient(180deg, #fbe3d6 0%, #fff6f0 55%, #ebd9c5 100%);
+}
+[data-theme='dark'] .pet-scene {
+  background: linear-gradient(180deg, #322a26 0%, #241e1b 55%, #1b1513 100%);
+}
+.pet-scene-ground {
+  background: rgba(228, 201, 168, 0.5);
+}
+[data-theme='dark'] .pet-scene-ground {
+  background: rgba(70, 54, 46, 0.55);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* honour iPhone notch / home indicator when installed */
+  overscroll-behavior-y: none;
+}
+
+/* tap targets shouldn't show the grey flash on iOS */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* a soft warm gradient backdrop for the whole app */
+.berdua-bg {
+  background:
+    radial-gradient(120% 60% at 50% -10%, #ffe9dd 0%, transparent 60%),
+    radial-gradient(80% 50% at 100% 100%, #f3ece0 0%, transparent 55%),
+    var(--color-cream);
+}
+
+@layer components {
+  .card {
+    @apply rounded-[var(--radius-card)] bg-paper shadow-[0_8px_30px_-12px_rgba(58,46,43,0.18)] ring-1 ring-ink/5;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-coral px-5 py-3 font-bold text-white shadow-sm transition active:scale-[0.97] disabled:opacity-50;
+  }
+  .btn-soft {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-cream-deep px-4 py-2.5 font-semibold text-ink transition active:scale-[0.97];
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition;
+  }
+}
+
+/* ── Map pins (MapLibre custom DOM markers) ── */
+.place-pin {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transform-origin: bottom center;
+  filter: drop-shadow(0 3px 3px rgba(58, 46, 43, 0.35));
+  transition: transform 0.15s ease;
+}
+.place-pin:active {
+  transform: scale(0.92);
+}
+.place-pin--active {
+  transform: scale(1.3);
+  z-index: 2;
+}
+.place-pin__svg {
+  display: block;
+  width: 1.75rem;
+  height: auto;
+}
+.place-pin__svg .pin-body {
+  fill: var(--color-coral);
+}
+.place-pin__svg .pin-dot {
+  fill: #fff;
+}
+.user-dot {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  background: #2f80ed;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 4px rgba(47, 128, 237, 0.25);
+}
+
+/* iOS Safari gives date/time inputs an intrinsic min-width and ignores width:100%, so they spill
+   past their rounded container. Reset the native appearance + allow shrinking so they fit any field. */
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+}
+input[type='date']::-webkit-date-and-time-value,
+input[type='datetime-local']::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+/* respect users who prefer less motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

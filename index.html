@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0"
+    />
+    <meta name="theme-color" content="#e8927c" />
+    <meta name="description" content="A warm little pocket-world for just the two of you." />
+    <!-- iOS standalone PWA hints -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Berdua" />
+    <title>Berdua · just the two of us</title>
+    <!-- Apply the saved theme BEFORE first paint to avoid a light flash on refresh (FOUC). -->
+    <script>
+      (function () {
+        try {
+          var mode = 'light'
+          var raw = localStorage.getItem('berdua-session')
+          if (raw) {
+            var parsed = JSON.parse(raw)
+            mode = (parsed && parsed.state && parsed.state.themeMode) || 'light'
+          }
+          if (mode === 'auto') {
+            mode =
+              window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+          }
+          var root = document.documentElement
+          root.dataset.theme = mode
+          root.style.backgroundColor = mode === 'dark' ? '#211c1a' : '#fff6f0'
+        } catch (e) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
