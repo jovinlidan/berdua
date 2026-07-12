@@ -2,7 +2,7 @@
 // Run: pnpm exec tsx scripts/test-sync.ts
 import assert from 'node:assert'
 import { emptyDoc, mergeDocs } from '../api/_lib/merge'
-import { dueReminders } from '../api/_lib/reminders'
+import { dueReminders, reminderDeliveryKey } from '../api/_lib/reminders'
 import type { SyncDoc, SyncSnapshot } from '../src/types'
 
 const NOW = Date.UTC(2026, 5, 13, 12, 0, 0) // Sat 13 Jun 2026, 12:00 UTC
@@ -105,8 +105,17 @@ ok('idempotent: re-merging the same snapshot does not duplicate')
 const doc = (over: Partial<SyncDoc>) => stored({ couple: couple(), notifPrefs: prefs(false), ...over })
 
 let ev = dueReminders(doc({ todos: [todoDue('t1', 0)] }), NOW)
-assert.ok(ev.some((e) => e.key === 'todo:t1:due'))
+assert.ok(ev.some((e) => e.key === `todo:t1:due:${NOW}`))
 ok('to-do due now → reminder')
+
+const firstDueKey = ev.find((e) => e.key.startsWith('todo:t1:'))?.key
+ev = dueReminders(doc({ todos: [todoDue('t1', 1)] }), NOW + HOUR)
+const movedDueKey = ev.find((e) => e.key.startsWith('todo:t1:'))?.key
+assert.ok(firstDueKey && movedDueKey && firstDueKey !== movedDueKey)
+ok('moving a to-do reminder creates a fresh dedupe key')
+
+assert.notEqual(reminderDeliveryKey(movedDueKey, 'device-a'), reminderDeliveryKey(movedDueKey, 'device-b'))
+ok('reminder delivery deduplicates per device')
 
 ev = dueReminders(doc({ todos: [todoDue('t2', 48)] }), NOW)
 assert.ok(!ev.some((e) => e.key.startsWith('todo:t2')))

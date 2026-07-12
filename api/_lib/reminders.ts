@@ -7,6 +7,9 @@ export interface ReminderEvent {
   url: string
 }
 
+export const reminderDeliveryKey = (eventKey: string, deviceId: string): string =>
+  `${eventKey}:device:${deviceId}`
+
 const HOUR = 3_600_000
 const DAY = 86_400_000
 
@@ -37,7 +40,14 @@ export function dueReminders(doc: SyncDoc, nowMs: number): ReminderEvent[] {
   for (const todo of doc.todos) {
     if (todo.done || !todo.dueAt) continue
     if (nowMs >= todo.dueAt - 30 * 60_000 && nowMs < todo.dueAt + 6 * HOUR) {
-      events.push({ key: `todo:${todo.id}:due`, title: 'A little to-do ✅', body: todo.title, url: '/todos' })
+      // Include the scheduled instant so moving a reminder creates a new event instead of being
+      // suppressed forever by the old date's dedupe entry.
+      events.push({
+        key: `todo:${todo.id}:due:${todo.dueAt}`,
+        title: 'A little to-do ✅',
+        body: todo.title,
+        url: '/todos',
+      })
     }
   }
 

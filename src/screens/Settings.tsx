@@ -31,8 +31,18 @@ const FIELD =
 
 export default function Settings() {
   const couple = useCouple()
-  const { activePartner, deviceId, lang, setLang, notifPrefs, setNotifPrefs, setPushSub, themeMode, setThemeMode } =
-    useSession()
+  const {
+    activePartner,
+    deviceId,
+    lang,
+    setLang,
+    notifPrefs,
+    setNotifPrefs,
+    pushSub,
+    setPushSub,
+    themeMode,
+    setThemeMode,
+  } = useSession()
   const t = useT()
   const support = notificationSupport()
   const { status, lastSyncedAt } = useSyncStatus()
@@ -45,14 +55,22 @@ export default function Settings() {
   const [cooldown, setCooldown] = useState(ERASE_COOLDOWN_S)
   const [erasing, setErasing] = useState(false)
 
-  // Run the cool-down countdown while the erase sheet is open; reset it when the sheet closes.
+  function openEraseSheet() {
+    setCooldown(ERASE_COOLDOWN_S)
+    setEraseText('')
+    setEraseOpen(true)
+  }
+
+  function closeEraseSheet() {
+    if (erasing) return
+    setEraseOpen(false)
+    setCooldown(ERASE_COOLDOWN_S)
+    setEraseText('')
+  }
+
+  // Run the cool-down countdown only while the erase sheet is open.
   useEffect(() => {
-    if (!eraseOpen) {
-      setCooldown(ERASE_COOLDOWN_S)
-      setEraseText('')
-      return
-    }
-    if (cooldown <= 0) return
+    if (!eraseOpen || cooldown <= 0) return
     const t = window.setTimeout(() => setCooldown((c) => c - 1), 1000)
     return () => window.clearTimeout(t)
   }, [eraseOpen, cooldown])
@@ -78,7 +96,10 @@ export default function Settings() {
     setPerm(result)
     if (result === 'granted') {
       const sub = await subscribeToPush(activePartner, deviceId)
-      if (sub) setPushSub(sub)
+      if (sub) {
+        setPushSub(sub)
+        await syncOnce(true)
+      }
     }
     haptic(8)
   }
@@ -226,7 +247,7 @@ export default function Settings() {
       <Section title={t('Gentle reminders')}>
         {!support.supported ? (
           <p className="text-sm text-ink-soft">{t('This browser doesn’t support notifications.')}</p>
-        ) : perm === 'granted' ? (
+        ) : perm === 'granted' && pushSub ? (
           <>
             <div className="mb-3 flex items-center gap-2 rounded-2xl bg-sage/10 px-4 py-3 font-bold text-sage">
               <BellRing size={18} /> {t('Reminders are on')}
@@ -391,7 +412,7 @@ export default function Settings() {
 
       <button
         type="button"
-        onClick={() => setEraseOpen(true)}
+        onClick={openEraseSheet}
         className="mx-auto mt-2 flex text-sm font-bold text-coral-deep/70"
       >
         {t('Start over (erase everything)')}
@@ -399,7 +420,7 @@ export default function Settings() {
       <p className="mt-8 text-center font-script text-2xl text-coral-soft">{t('made with love, just for us')}</p>
 
       {/* Erase confirmation — type CONFIRM + a short cool-down before the button arms */}
-      <BottomSheet open={eraseOpen} onClose={() => !erasing && setEraseOpen(false)} title={t('Erase everything?')}>
+      <BottomSheet open={eraseOpen} onClose={closeEraseSheet} title={t('Erase everything?')}>
         <div className="space-y-4">
           <div className="flex items-start gap-3 rounded-2xl bg-coral/10 p-4">
             <AlertTriangle size={20} className="mt-0.5 shrink-0 text-coral-deep" />
@@ -437,7 +458,7 @@ export default function Settings() {
           <button
             type="button"
             disabled={erasing}
-            onClick={() => setEraseOpen(false)}
+            onClick={closeEraseSheet}
             className="mx-auto flex text-sm font-bold text-ink-soft active:scale-95"
           >
             {t('Cancel')}

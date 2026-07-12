@@ -26,11 +26,15 @@ export default function Welcome() {
 
   async function enableNotifs() {
     const result = await requestPermission()
+    let subscribed = false
     if (result === 'granted') {
       const sub = await subscribeToPush(activePartner, deviceId)
-      if (sub) setPushSub(sub)
+      if (sub) {
+        setPushSub(sub)
+        subscribed = true
+      }
     }
-    setNotifGranted(result === 'granted')
+    setNotifGranted(subscribed)
     haptic(8)
   }
 

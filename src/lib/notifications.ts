@@ -40,12 +40,17 @@ export async function subscribeToPush(partner: PartnerKey, deviceId: string): Pr
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null
   try {
     const reg = await navigator.serviceWorker.ready
-    const sub =
-      (await reg.pushManager.getSubscription()) ??
-      (await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      }))
+    const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    let sub = await reg.pushManager.getSubscription()
+    const existingKey = sub?.options.applicationServerKey
+    if (sub && existingKey && !sameBytes(new Uint8Array(existingKey), applicationServerKey)) {
+      await sub.unsubscribe()
+      sub = null
+    }
+    sub ??= await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey,
+    })
     const json = sub.toJSON()
     if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return null
     return {
@@ -59,6 +64,10 @@ export async function subscribeToPush(partner: PartnerKey, deviceId: string): Pr
   } catch {
     return null
   }
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index])
 }
 
 /** Fire a notification through the service worker — proves the SW pipeline end to end. */

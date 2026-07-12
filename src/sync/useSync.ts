@@ -1,4 +1,6 @@
 import { useEffect } from 'react'
+import { subscribeToPush } from '../lib/notifications'
+import { useSession } from '../store/useSession'
 import { onChange } from './bus'
 import { useSyncStatus } from './status'
 import { syncOnce } from './sync'
@@ -12,10 +14,25 @@ const DEBOUNCE_MS = 1_500
 /** Drives phase-2 sync: pull/push on mount, on focus, on a poll, and after local changes. */
 export function useSync() {
   useEffect(() => {
+    const repairPushSubscription = async () => {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return
+      const current = useSession.getState()
+      const sub = await subscribeToPush(current.activePartner, current.deviceId)
+      if (!sub) return
+      const saved = useSession.getState().pushSub
+      const unchanged =
+        saved?.partner === sub.partner &&
+        saved.endpoint === sub.endpoint &&
+        saved.p256dh === sub.p256dh &&
+        saved.auth === sub.auth
+      if (!unchanged) useSession.getState().setPushSub(sub)
+    }
+
     const run = () => {
       void syncOnce()
     }
     run()
+    void repairPushSubscription()
 
     const poll = window.setInterval(run, POLL_MS)
     const onFocus = () => run()
