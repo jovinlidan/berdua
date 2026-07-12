@@ -1,80 +1,148 @@
 # Berdua 💞
 
-> _A warm little pocket-world for just the two of you._
+Berdua is a private, installable PWA for two people. It is local-first, works offline, and can sync a
+couple's shared data between two phones through a private pairing code.
 
-A private, installable **PWA** for one couple — shared date ideas, a bucket list of dreams,
-and the memories you make together. No app store, no accounts for strangers, no feed. Just you two.
+## What is included
 
-Built for a **mixed iPhone + Android** household: it installs to the home screen on both and
-(in phase 2) sends gentle reminders via Web Push that work on iOS 16.4+ once installed.
+- Shared Wishlist with categories, reminders, swipe actions, and optional map locations
+- Calendar for dated Wishlist items, capsules, and anniversaries
+- Bucket list, daily mood check-ins, time capsules, and Thinking-of-you history
+- Food map powered by MapLibre and keyless OpenStreetMap search
+- Shared pixel pets with a habitat and care actions
+- Local-only secret space with optional PIN and private photos
+- English and Bahasa Indonesia, light/dark mode, accent themes, backup/restore, and offline support
+- Two-device sync with Upstash Redis and Web Push reminders when deployed
 
-## Features (phase 1 — works today, fully offline, no backend)
-- **Date Ideas board** — browse/add/pick ideas, filter by vibe & budget, seeded with 31 starters.
-- **Surprise Me** — a calm card-flip picker for "what should we do tonight?".
-- **Bucket list** — shared dreams with wish-levels; checking one off becomes a kept memory.
-- **Memories journal** — photos (compressed on-device), a handwritten-style story, location.
-- **The Both-Hearts seal** — a memory only earns its golden glow once *both* of you rate it 💛.
-- **Home dashboard** — days-together, anniversary countdown, "on this day", upcoming date, your story stats.
-- **Plan a date**, photo lightbox, fluid page transitions, haptics + confetti on the payoff beats.
-- **Shared to-do list** — quick add, satisfying check animations, optional reminders, clear-done.
-- **💌 Time capsules** — write a note that stays locked until a future date, then unlocks (with a push).
-- **💭 Thinking of you** — one tap sends a sweet push to your partner's phone.
-- **Search** date ideas · **backup & restore** (export/import JSON) · **one-tap install**.
-- **Installable** — manifest + offline service worker + add-to-home-screen flow + demo notification.
+## Prerequisites
 
-## Phase 2 — cross-phone sync + push reminders (built)
-- **Sync:** one JSON doc per couple in Upstash Redis, keyed by your couple-space code. Per-record
-  last-write-wins + tombstones; photos stay on-device. Three serverless functions in `api/`.
-- **Push:** self-generated VAPID keys; a `cron-job.org` ping hits `/api/cron` every ~15 min to send
-  date / to-do / anniversary / weekend reminders, respecting quiet hours.
-- **Setup (all free, ~10 min):** see **[DEPLOY.md](./DEPLOY.md)**.
-- **Test locally:** `pnpm dev` includes an in-memory sync API — open two browser profiles with the same
-  couple-space code to watch sync work before deploying.
+- [Node.js](https://nodejs.org/) 20.19+ or 22.12+
+- [pnpm](https://pnpm.io/installation)
+- Git
 
-## Production touches
-Animated route transitions, list stagger, springy nav indicator, count-up stats, confetti on the seal,
-toast feedback, an error boundary, and a live sync-status indicator.
+Check your tools:
 
-## Run it locally
 ```bash
-pnpm install
-pnpm dev          # http://localhost:5174 (or whatever Vite prints)
+node --version
+pnpm --version
+git --version
 ```
-Build & preview the production PWA (the service worker only fully works in a build/preview or over HTTPS):
+
+## 1. Clone and install
+
+```bash
+git clone https://github.com/jovinlidan/berdua.git
+cd berdua
+pnpm install --frozen-lockfile
+```
+
+## 2. Create the local environment file
+
+```bash
+cp .env.example .env.local
+```
+
+The app can run locally with every value left empty:
+
+- Place search uses Photon/OpenStreetMap by default. `VITE_MAPBOX_TOKEN` is only an optional upgrade.
+- Local sync uses an in-memory development API.
+- Real cross-phone sync and push notifications require the production variables described below.
+
+Never commit `.env.local` or expose server-only credentials through a `VITE_` variable.
+
+## 3. Start the development server
+
+```bash
+pnpm dev
+```
+
+Open the URL printed by Vite, usually [http://localhost:5173](http://localhost:5173). On the Welcome
+screen, enter your name and a private couple code.
+
+To test pairing locally:
+
+1. Keep the development server running.
+2. Open the app in two browser profiles, or one regular and one private window.
+3. Enter a different name on each browser and use the same couple code.
+4. Add or edit an item and wait for it to appear in the other browser.
+
+The local sync store is memory-only and resets whenever the Vite server restarts. Browser data remains
+in IndexedDB until the site data is cleared.
+
+## 4. Validate the project
+
 ```bash
 pnpm build
+pnpm typecheck:api
+pnpm lint
+pnpm exec tsx scripts/test-pairing.ts
+pnpm exec tsx scripts/test-sync.ts
+pnpm exec tsx scripts/test-pet.ts
+```
+
+The build, API type-check, and logic checks are expected to pass. `pnpm lint` currently reports 16
+known errors; cleaning that baseline is tracked in [tasks/todo.md](./tasks/todo.md). Do not introduce
+additional lint errors in new work.
+
+Preview the production build locally:
+
+```bash
 pnpm preview
 ```
-Regenerate the app icons after editing `scripts/gen-icons.mjs`:
-```bash
-node scripts/gen-icons.mjs
+
+The service worker and install experience are best tested from a production build over HTTPS.
+
+## Production setup
+
+Production sync and reminders use Vercel, Upstash Redis, VAPID keys, and an external cron trigger.
+Set these variables in Vercel:
+
+| Variable | Purpose |
+| --- | --- |
+| `UPSTASH_REDIS_REST_URL` | Upstash Redis REST endpoint |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST credential |
+| `VITE_VAPID_PUBLIC_KEY` | Client-visible Web Push public key |
+| `VAPID_PRIVATE_KEY` | Server-only Web Push private key |
+| `VAPID_SUBJECT` | Contact URI, usually `mailto:you@example.com` |
+| `CRON_SECRET` | Secret protecting `/api/cron` |
+| `VITE_MAPBOX_TOKEN` | Optional Mapbox place-search upgrade |
+
+Follow [DEPLOY.md](./DEPLOY.md) for the complete deployment, cron, phone installation, and reminder
+test tutorial.
+
+## Project structure
+
+```text
+api/             Vercel functions for sync, reminders, pings, and map-link resolution
+public/          PWA icons and bundled pet sprites
+scripts/         Logic and Playwright verification scripts
+src/components/  Shared UI and interaction components
+src/db/          Dexie database, hooks, and repository operations
+src/lib/         Dates, maps, notifications, pets, themes, and utilities
+src/screens/     Route-level screens
+src/store/       Per-device Zustand session state
+src/sync/        Client sync engine and status tracking
+src/sw.ts        Offline cache, push, and notification service worker
+tasks/           Compact backlog and engineering lessons
 ```
 
-## Put it on your phones (free, no store)
-1. Deploy the `dist/` build to any static HTTPS host — **Vercel** or **Netlify** free tier is perfect
-   (HTTPS is required for the service worker & notifications).
-2. On the live URL:
-   - **iPhone (Safari):** Share → **Add to Home Screen**. _(Push only works after this — it's an iOS rule.)_
-   - **Android (Chrome):** menu ⋮ → **Install app**.
-3. Open it from the home-screen icon — it runs full-screen like a native app.
+## Data and privacy model
 
-## Tech
-Vite + React + TypeScript · Tailwind v4 · vite-plugin-pwa (injectManifest + Workbox) · React Router ·
-Zustand (session) · Dexie + dexie-react-hooks (local-first reactive store) · framer-motion ·
-canvas-confetti · self-hosted Fraunces / Nunito / Caveat (@fontsource) ·
-Upstash Redis + web-push (VAPID) on Vercel serverless for phase-2 sync & reminders.
+- IndexedDB is the local source of truth; the app remains usable offline.
+- Shared records sync as one couple document with last-write-wins merging and tombstones.
+- Pairing is limited to two member slots. A matching name can reclaim its slot after reinstalling.
+- Secret-space entries and photos never enter the shared sync document.
+- Photo blobs remain device-local; use Export/Restore when moving them between devices.
 
-## Layout
-```
-src/
-  db/         Dexie schema, repository (only writer), reactive hooks
-  data/       seed date ideas
-  lib/        dates, milestones, taxonomy, photos, notifications, haptics, celebrate, partners
-  store/      Zustand session (active partner + notif prefs + push sub)
-  sync/       sync engine, change bus, sync-status store
-  components/ AppShell, BottomNav, PartnerToggle, sheets, HeartRating, Toast, ErrorBoundary, …
-  screens/    Welcome, Home, Ideas, IdeaDetail, PlanDate, Bucket, Todos, Memories, MemoryDetail, Surprise, Settings
-  sw.ts       custom service worker (offline + push + notificationclick)
-api/          serverless: state.ts (sync), cron.ts (reminders), _lib/ (kv, merge, reminders)
-```
-See `tasks/todo.md` for the full plan and phase-2 backlog.
+## Useful commands
+
+| Command | Action |
+| --- | --- |
+| `pnpm dev` | Start Vite with the in-memory sync API |
+| `pnpm build` | Type-check the client and create `dist/` |
+| `pnpm typecheck:api` | Type-check Vercel API functions |
+| `pnpm lint` | Run ESLint |
+| `pnpm preview` | Serve the production build locally |
+| `pnpm icons` | Regenerate PWA icons |
+
+Current work and remaining improvements are tracked in [tasks/todo.md](./tasks/todo.md).
