@@ -108,6 +108,11 @@ export class BerduaDB extends Dexie {
     // and no .upgrade() (existing rows just read place === undefined). Re-declared with the EXISTING
     // index string purely to advance the schema version; IndexedDB stores the new field transparently.
     this.version(14).stores({ todos: 'id, category, dueAt, createdAt, updatedAt' })
+    // v15: routines — a repeat rule (Todo.routine) plus its per-occurrence ticks (Todo.routineLog).
+    // Both are payload-only (an object and a map can't be indexed anyway), so this mirrors v14:
+    // the index string is unchanged and the bump only records the shape change. Existing rows read
+    // routine === undefined and stay plain one-off to-dos.
+    this.version(15).stores({ todos: 'id, category, dueAt, createdAt, updatedAt' })
   }
 }
 

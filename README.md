@@ -6,7 +6,9 @@ couple's shared data between two phones through a private pairing code.
 ## What is included
 
 - Shared Wishlist with categories, reminders, swipe actions, and optional map locations
-- Calendar for dated Wishlist items, capsules, and anniversaries
+- Repeatable routines: daily, weekly, or monthly rules with per-day check-offs, streaks, and reminders
+- Calendar for dated Wishlist items, routine occurrences, capsules, and anniversaries
+- One-tap export of a dated item or a whole routine to each phone's own calendar app (.ics)
 - Bucket list, daily mood check-ins, time capsules, and Thinking-of-you history
 - Food map powered by MapLibre and keyless OpenStreetMap search
 - Shared pixel pets with a habitat and care actions
@@ -78,9 +80,10 @@ pnpm lint
 pnpm exec tsx scripts/test-pairing.ts
 pnpm exec tsx scripts/test-sync.ts
 pnpm exec tsx scripts/test-pet.ts
+pnpm exec tsx scripts/test-routine.ts
 ```
 
-The build, API type-check, and logic checks are expected to pass. `pnpm lint` currently reports 16
+The build, API type-check, and logic checks are expected to pass. `pnpm lint` currently reports 15
 known errors; cleaning that baseline is tracked in [tasks/todo.md](./tasks/todo.md). Do not introduce
 additional lint errors in new work.
 

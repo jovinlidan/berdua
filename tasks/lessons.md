@@ -60,6 +60,22 @@ one. Piping a build/test/lint through `tail`/`grep`/`head` hides its real succes
 `pnpm build > /tmp/out.log 2>&1; echo "EXIT:$?"; tail -25 /tmp/out.log` (or set `pipefail`). Always
 read the actual EXIT line, not the harness's wrapper exit code, before declaring a step green.
 
+## 2026-08-17 — A `.ts` module run by plain `node` may not gain relative imports
+**Context:** `scripts/test-ics.mjs` runs under bare `node` and imports `src/lib/calendar.ts`
+directly. Adding `import { … } from './recurrence'` to `calendar.ts` broke that script with
+`ERR_MODULE_NOT_FOUND` — even though `pnpm build`, `tsc`, and the tsx-run tests were all green.
+
+**Lesson:** Node ≥22 strips TypeScript types automatically, which is why importing a `.ts` file from
+a `.mjs` script works at all — but it does **not** apply bundler resolution. Extensionless relative
+specifiers (and the `.js`→`.ts` rewrite) are Vite/tsc behaviour only, so the first relative import
+added to such a module breaks every plain-`node` consumer of it. A green typecheck cannot catch this.
+
+**How to apply:** Before adding an import to a module under `src/lib/`, check whether any
+`scripts/*.mjs` imports it under bare `node` (`grep -rn "lib/<name>" scripts/`). If so, keep that
+module import-free and put the code that needs dependencies in a new module beside it (here:
+`lib/todoIcs.ts` bridges `lib/calendar.ts` and `lib/recurrence.ts`). Always run the `.mjs` logic
+tests with the runner they document, not with `tsx`, which papers the failure over.
+
 ## 2026-06-24 — Check i18n.id.ts for an existing key before adding a translation
 **Context:** Added a `// Map` block of Indonesian strings to `src/lib/i18n.id.ts`; `Remove: 'Hapus'`
 already existed later in the file. `tsc` failed with TS1117 (duplicate object literal property).

@@ -3,6 +3,7 @@
 // tombstones) and returns the merged doc, which we apply back into Dexie. Photos stay
 // local. If the API is unreachable (e.g. local dev, offline), every call no-ops quietly.
 import { db } from '../db/database'
+import { mergeRoutineLogs, sameRoutineLog } from '../lib/recurrence'
 import { useSession } from '../store/useSession'
 import type { Couple, PartnerKey, SyncDoc, SyncSnapshot } from '../types'
 import { onChange } from './bus'
@@ -117,9 +118,20 @@ async function applyRemote(doc: SyncDoc): Promise<void> {
     'rw',
     [db.bucketItems, db.todos, db.todoGroups, db.sealedNotes, db.thinkingPings, db.dailyMoodChecks, db.couples, db.pets],
     async () => {
+    // To-dos are per-record LWW like everything else, EXCEPT `routineLog`: a partner's tick on one
+    // occurrence day must survive even when our copy of the record is newer (say we renamed the
+    // routine after they ticked yesterday), so the log is unioned per day in both directions.
     for (const r of doc.todos) {
+      if (shadowed(r.id, r.updatedAt)) continue
       const local = await db.todos.get(r.id)
-      if (!shadowed(r.id, r.updatedAt) && newer(local, r)) await db.todos.put(r)
+      const log = mergeRoutineLogs(local?.routineLog, r.routineLog)
+      if (newer(local, r)) {
+        await db.todos.put(log ? { ...r, routineLog: log } : r)
+      } else if (log && !sameRoutineLog(log, local?.routineLog)) {
+        // Leave `updatedAt` alone — a per-day union is order-independent, so it needs no new clock,
+        // and bumping it here would make our record spuriously win the next field-level merge.
+        await db.todos.update(r.id, { routineLog: log })
+      }
     }
     for (const r of doc.todoGroups ?? []) {
       const local = await db.todoGroups.get(r.id)
