@@ -19,6 +19,12 @@ export const MAX_OCCURRENCES = 400
 const SCAN_LIMIT_DAYS = 366 * 6
 
 export const ROUTINE_FREQS: RoutineFreq[] = ['daily', 'weekly', 'monthly']
+/** Short label key per frequency, for places too narrow for the full rule. */
+export const ROUTINE_FREQ_LABELS: Record<RoutineFreq, string> = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+}
 /** 0=Sun to 6=Sat. These English abbreviations double as the i18n keys. */
 export const WEEKDAY_KEYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 const ICS_WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   MAX_OCCURRENCES,
   ROUTINE_FREQS,
+  ROUTINE_FREQ_LABELS,
   WEEKDAY_KEYS,
   addDaysKey,
   nextOccurrenceKey,
@@ -24,7 +25,6 @@ import { Chip } from './Chip'
 const FIELD =
   'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
 
-const FREQ_LABELS: Record<RoutineFreq, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }
 const UNIT_LABELS: Record<RoutineFreq, [one: string, many: string]> = {
   daily: ['day', 'days'],
   weekly: ['week', 'weeks'],
@@ -119,7 +119,7 @@ export function RoutineSheet({
                 setFreq(f)
               }}
             >
-              {t(FREQ_LABELS[f])}
+              {t(ROUTINE_FREQ_LABELS[f])}
             </Chip>
           ))}
         </div>
@@ -131,7 +131,7 @@ export function RoutineSheet({
             <button
               type="button"
               onClick={() => setEvery((n) => Math.max(1, n - 1))}
-              aria-label={t('Repeat more often')}
+              aria-label={t('Decrease interval')}
               className="grid h-8 w-8 place-items-center rounded-full text-lg font-bold text-ink-soft active:scale-90"
             >
               −
@@ -140,7 +140,7 @@ export function RoutineSheet({
             <button
               type="button"
               onClick={() => setEvery((n) => Math.min(99, n + 1))}
-              aria-label={t('Repeat less often')}
+              aria-label={t('Increase interval')}
               className="grid h-8 w-8 place-items-center rounded-full text-lg font-bold text-ink-soft active:scale-90"
             >
               +
@@ -163,11 +163,11 @@ export function RoutineSheet({
                     onClick={() => toggleWeekday(day)}
                     aria-pressed={on}
                     aria-label={t(key)}
-                    className={`h-10 flex-1 rounded-xl text-xs font-bold transition active:scale-90 ${
+                    className={`h-11 flex-1 rounded-xl text-[11px] font-bold transition active:scale-90 ${
                       on ? 'bg-coral text-white' : 'bg-cream-deep text-ink-soft'
                     }`}
                   >
-                    {t(key).slice(0, 2)}
+                    {t(key)}
                   </button>
                 )
               })}
@@ -200,7 +200,7 @@ export function RoutineSheet({
                   setEndMode(mode)
                 }}
               >
-                {t(mode === 'never' ? 'Never' : mode === 'on' ? 'On a date' : 'After N times')}
+                {t(mode === 'never' ? 'Never' : mode === 'on' ? 'On a date' : 'After')}
               </Chip>
             ))}
           </div>
@@ -229,9 +229,9 @@ export function RoutineSheet({
         </div>
 
         {/* live read-back of the rule + its first few days */}
-        <div className="rounded-2xl bg-coral/10 p-3.5 ring-1 ring-coral/20">
+        <div className="rounded-2xl bg-cream-deep p-3.5">
           <p className="flex items-center gap-2 font-semibold text-ink">
-            <Repeat size={15} className="shrink-0 text-coral" />
+            <Repeat size={15} className="shrink-0 text-ink-soft" />
             {valid ? routineSummary(draft, t) : t('Pick at least one day')}
           </p>
           {preview.length > 0 && (

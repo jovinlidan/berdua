@@ -70,9 +70,9 @@ export default function Story() {
       {routineDays > 0 && (
         <motion.p
           {...fade(0.12)}
-          className="mx-auto flex w-fit items-center gap-1.5 rounded-full bg-sage/15 px-3.5 py-2 text-sm font-semibold text-ink"
+          className="mx-auto flex w-fit items-center gap-1.5 rounded-full bg-cream-deep px-3 py-1.5 text-sm font-semibold text-ink"
         >
-          <Repeat size={15} className="text-sage" />
+          <Repeat size={15} className="text-ink-soft" />
           {t('{n} routine days kept together', { n: routineDays })}
         </motion.p>
       )}

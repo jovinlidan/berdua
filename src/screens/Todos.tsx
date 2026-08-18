@@ -19,6 +19,7 @@ import { useT } from '../lib/i18n'
 import { openNavigation } from '../lib/navlinks'
 import { PARTNER_COLORS, partnerName } from '../lib/partners'
 import {
+  ROUTINE_FREQ_LABELS,
   isTodoDoneNow,
   routineProgress,
   routineStreak,
@@ -234,7 +235,7 @@ export default function Todos() {
             onClick={() => setRoutineFor('new')}
             className={`chip ${newRoutine ? 'bg-coral/15 text-coral-deep' : 'bg-cream-deep text-ink-soft'}`}
           >
-            <Repeat size={14} /> {newRoutine ? routineSummary(newRoutine, t) : t('Repeat it')}
+            <Repeat size={14} /> {newRoutine ? t(ROUTINE_FREQ_LABELS[newRoutine.freq]) : t('Repeat it')}
           </button>
         </div>
         <AnimatePresence>
@@ -362,7 +363,6 @@ export default function Todos() {
                 onChange={(e) => setEditLabel(e.target.value)}
                 placeholder={t('Category name')}
                 className={FIELD}
-                autoFocus
               />
             </div>
             <div className="flex gap-3">
@@ -427,7 +427,6 @@ export default function Todos() {
                 placeholder={t('What needs doing?')}
                 value={etTitle}
                 onChange={(e) => setEtTitle(e.target.value)}
-                autoFocus
               />
             </div>
             <div>
@@ -608,8 +607,8 @@ function RoutineProgressLine({ todo, todayKey }: { todo: Todo; todayKey: string 
   const streak = routineStreak(todo, todayKey)
   return (
     <p className="px-1 text-xs text-ink-soft">
-      {total === null ? t('{done} done so far', { done }) : t('{done} of {total} done', { done, total })}
-      {streak >= 2 && ` · ${t('{n} in a row 🔥', { n: streak })}`}
+      {total === null ? t('{done} done', { done }) : t('{done} of {total} done', { done, total })}
+      {streak >= 2 && ` · ${t('{n} in a row', { n: streak })}`}
     </p>
   )
 }
@@ -854,20 +853,18 @@ function TodoRow({
             </span>
           )}
           {todo.routine && (
-            <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] font-semibold text-sage">
-              <span className="flex items-center gap-1">
-                <Repeat size={11} /> {routineSummary(todo.routine, t)}
-              </span>
-              {progress?.total ? (
-                <span className="text-ink-soft">
-                  · {t('{done}/{total}', { done: progress.done, total: progress.total })}
+            <span className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-ink-soft">
+              <Repeat size={11} className="shrink-0" />
+              <span className="truncate">{routineSummary(todo.routine, t)}</span>
+              {/* One stat, never two: a live streak if there is one, otherwise how far a finite
+                  routine has got. Colour is reserved for status, so the rule itself stays quiet. */}
+              {streak >= 2 ? (
+                <span className="flex shrink-0 items-center gap-0.5 text-coral-deep">
+                  · <Flame size={11} /> {streak}
                 </span>
+              ) : progress?.total ? (
+                <span className="shrink-0">· {progress.done}/{progress.total}</span>
               ) : null}
-              {streak >= 2 && (
-                <span className="flex items-center gap-0.5 text-coral-deep">
-                  <Flame size={11} /> {streak}
-                </span>
-              )}
             </span>
           )}
           {todo.dueAt && !todo.routine && !todo.done && (

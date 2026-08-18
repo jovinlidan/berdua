@@ -28,10 +28,11 @@ import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
 import type { PartnerKey } from '../types'
 
-// Labels are translated at render via t(); colors/emoji stay as-is.
-const META: Record<CalendarEventType | 'anniversary', { emoji: string; color: string; label: string }> = {
+// Labels are translated at render via t(); colors/emoji stay as-is. A routine carries no emoji:
+// its row is interactive, so the slot holds a real check control instead (see RoutineRow).
+const META: Record<CalendarEventType | 'anniversary', { emoji?: string; color: string; label: string }> = {
   todo: { emoji: '☑️', color: '#7C8A6F', label: 'Wishlist' },
-  routine: { emoji: '🔁', color: '#6F93D9', label: 'Routine' },
+  routine: { color: '#D98C5F', label: 'Routine' },
   capsule: { emoji: '💌', color: '#9D8EC9', label: 'Capsule' },
   anniversary: { emoji: '❤️', color: '#E07A9B', label: 'Anniversary' },
 }
@@ -307,6 +308,7 @@ function RoutineRow({
       className="card flex w-full items-center gap-3 p-3.5"
       style={{ boxShadow: `inset 4px 0 0 ${META.routine.color}` }}
     >
+      {/* The same check the wishlist row uses, so "tap to tick this day off" needs no explaining. */}
       <button
         type="button"
         disabled={!occurrenceKey}
@@ -316,14 +318,18 @@ function RoutineRow({
           void toggleRoutineOccurrence(event.sourceId, occurrenceKey, by)
         }}
         aria-label={event.done ? t('Mark not done') : t('Mark done')}
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-xl transition active:scale-90"
-        style={
-          event.done
-            ? { backgroundColor: '#7C8A6F', color: '#fff' }
-            : { backgroundColor: `${META.routine.color}22` }
-        }
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl transition active:scale-90"
       >
-        {event.done ? <Check size={18} strokeWidth={3} /> : META.routine.emoji}
+        <span
+          className="grid h-6 w-6 place-items-center rounded-full text-white"
+          style={
+            event.done
+              ? { backgroundColor: '#7C8A6F', boxShadow: 'inset 0 0 0 2px #7C8A6F' }
+              : { backgroundColor: `${META.routine.color}26`, boxShadow: `inset 0 0 0 2px ${META.routine.color}` }
+          }
+        >
+          {event.done && <Check size={14} strokeWidth={3} />}
+        </span>
       </button>
       <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left active:opacity-70">
         <p className={`font-semibold ${event.done ? 'text-ink-soft/60 line-through' : 'text-ink'}`}>{event.title}</p>

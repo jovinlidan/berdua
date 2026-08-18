@@ -70,7 +70,8 @@ export default function Home() {
 
   // Routines that come around today (each day is ticked off on its own).
   const routines = routinesToday ?? []
-  const routinesLeft = routines.filter((r) => !r.done).length
+  const routinesDone = routines.filter((r) => r.done).length
+  const routinesLeft = routines.length - routinesDone
 
   const myMood = activePartner === 'A' ? todayMood?.moodA : todayMood?.moodB
   const theirMood = activePartner === 'A' ? todayMood?.moodB : todayMood?.moodA
@@ -187,8 +188,8 @@ export default function Home() {
                 <p className="font-serif text-lg font-semibold text-ink">{t('Our routines today')}</p>
                 <p className={`truncate text-sm ${routinesLeft > 0 ? 'font-semibold text-coral-deep' : 'text-ink-soft'}`}>
                   {routinesLeft > 0
-                    ? t('{n} still to do: {first}', { n: routinesLeft, first: routines.find((r) => !r.done)?.todo.title ?? '' })
-                    : t('All done today, you two 💞')}
+                    ? t('{done} of {total} done today', { done: routinesDone, total: routines.length })
+                    : t('All done today 💞')}
                 </p>
               </div>
             </motion.div>

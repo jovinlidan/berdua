@@ -52,7 +52,7 @@ await A.fill('[role="dialog"] input[type="time"]', '20:00')
 results.previewsNextDays = (await A.locator('text=Next:').count()) > 0
 await A.click('text=Save routine')
 await A.waitForTimeout(400)
-results.chipShowsSummary = (await A.locator(`text=${SUMMARY}`).count()) > 0
+results.chipShowsFrequency = (await A.locator('text=Daily').count()) > 0 // the chip shows the frequency, not the full rule
 await A.click('[aria-label="Add to-do"]')
 await A.waitForTimeout(700)
 results.rowShowsRoutine = (await A.locator(`text=${SUMMARY}`).count()) > 0
@@ -107,7 +107,7 @@ await A.waitForTimeout(600)
 results.editSheetShowsRepeat = (await A.locator('text=Repeats').count()) > 0
 results.canExportToPhoneCalendar = (await A.locator('text=Add to phone calendar').count()) > 0
 // A ticked today, B ticked yesterday → both survive, so the count is 2 (1 would mean a clobber)
-results.bothTicksSurvived = (await A.locator('text=2 done so far').count()) > 0
+results.bothTicksSurvived = (await A.locator('text=2 done').count()) > 0
 
 // changing the rule from inside the edit sheet (the repeat editor stacks on top of it)
 await A.click('text=Change')
