@@ -22,7 +22,7 @@ export function todoIcsInput(todo: Todo): DateIcsInput | null {
       start: occurrenceInstant(first, routine.time, localTzOffset()),
       durationMin: 60,
       allDay: !routine.time, // a routine with no time of day is an all-day series
-      rrule: toRRule(routine),
+      rrule: toRRule(routine, { dateOnlyUntil: !routine.time }),
       location,
       description,
       alarmMinutesBefore: 30,

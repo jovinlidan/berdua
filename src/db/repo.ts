@@ -302,9 +302,13 @@ export async function toggleTodo(id: string, by: PartnerKey = 'A'): Promise<void
 }
 
 // ── Routines (a to-do that repeats over many days) ─────────────────────────────
-/** Turn a to-do into a routine (or replace its repeat rule). Clears any one-off reminder. */
+/**
+ * Turn a to-do into a routine (or replace its repeat rule). Clears the one-off reminder, and also
+ * `done`: a routine is never finished as a whole, and a `done` routine would be invisible to the
+ * reminders and to Home while `clearDoneTodos` quietly deleted it along with its tick history.
+ */
 export async function setTodoRoutine(id: string, routine: Routine): Promise<void> {
-  await updateTodo(id, { routine: normalizeRoutine(routine), dueAt: undefined })
+  await updateTodo(id, { routine: normalizeRoutine(routine), dueAt: undefined, done: false, doneAt: undefined })
 }
 
 /** Stop repeating. The tick history stays, so re-enabling the routine brings its streak back. */

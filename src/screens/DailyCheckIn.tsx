@@ -11,7 +11,6 @@ import { otherPartner, PARTNER_COLORS, partnerName } from '../lib/partners'
 import { DAILY_MOODS, moodEmoji } from '../lib/taxonomy'
 import { useSession } from '../store/useSession'
 
-
 export default function DailyCheckIn() {
   const t = useT()
   const couple = useCouple()

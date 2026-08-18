@@ -439,6 +439,7 @@ export const ID: Record<string, string> = {
   After: 'Setelah',
   times: 'kali',
   'Pick at least one day': 'Pilih setidaknya satu hari',
+  'Pick the day it ends': 'Pilih hari berakhirnya',
   'Next: {days}': 'Berikutnya: {days}',
   'Every day': 'Setiap hari',
   'Every {n} days': 'Setiap {n} hari',

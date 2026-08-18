@@ -49,10 +49,14 @@ export default function Calendar() {
   const [selected, setSelected] = useState(() => new Date())
 
   // Routines are expanded per day on read, so the query is bounded to the visible month plus a
-  // month of slack either side, so stepping between months needs no new expansion.
+  // month of slack either side. The selected day is folded in as well: stepping the cursor two
+  // months away used to leave it outside the window, and its detail panel went blank.
+  const monthFrom = dayKey(addMonths(startOfWeek(startOfMonth(cursor)), -1))
+  const monthTo = dayKey(addMonths(endOfWeek(endOfMonth(cursor)), 1))
+  const selectedKey = dayKey(selected)
   const events = useCalendarEvents(
-    dayKey(addMonths(startOfWeek(startOfMonth(cursor)), -1)),
-    dayKey(addMonths(endOfWeek(endOfMonth(cursor)), 1)),
+    selectedKey < monthFrom ? selectedKey : monthFrom,
+    selectedKey > monthTo ? selectedKey : monthTo,
   )
 
   /** Hand one wishlist item to the phone's own calendar app (a routine goes as one RRULE event). */

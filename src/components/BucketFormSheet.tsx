@@ -9,7 +9,6 @@ import type { BucketItem, LinkSource, WishLevel } from '../types'
 import { BottomSheet } from './BottomSheet'
 import { Chip } from './Chip'
 
-
 export function BucketFormSheet({
   open,
   onClose,

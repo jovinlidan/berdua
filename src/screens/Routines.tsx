@@ -60,7 +60,8 @@ export default function Routines() {
   const todayKey = todayIso()
   const list = routines ?? []
   const dueToday = list.filter((r) => r.routine && occursOn(r.routine, todayKey) && withinLimits(r.routine, todayKey))
-  const later = list.filter((r) => !dueToday.includes(r))
+  const todayIds = new Set(dueToday.map((r) => r.id))
+  const later = list.filter((r) => !todayIds.has(r.id))
   const doneToday = dueToday.filter((r) => isOccurrenceDone(r, todayKey)).length
 
   async function add() {

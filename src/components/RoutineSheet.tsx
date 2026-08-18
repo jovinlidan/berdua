@@ -22,7 +22,6 @@ import type { Routine, RoutineFreq } from '../types'
 import { BottomSheet } from './BottomSheet'
 import { Chip } from './Chip'
 
-
 const UNIT_LABELS: Record<RoutineFreq, [one: string, many: string]> = {
   daily: ['day', 'days'],
   weekly: ['week', 'weeks'],
@@ -55,14 +54,18 @@ export function RoutineSheet({
   const [until, setUntil] = useState('')
   const [count, setCount] = useState(10)
 
-  // Seed the form from the rule being edited, but ONLY on open: `value` comes from a live Dexie
-  // query, so any unrelated write re-creates that object, and reacting to it would wipe an edit
-  // in progress.
-  const seed = useRef(value)
-  seed.current = value
+  // Seed the form from the rule being edited, but ONLY as the sheet opens: `value` comes from a
+  // live Dexie query, so any unrelated write re-creates that object, and re-seeding on it would
+  // wipe an edit in progress.
+  const wasOpen = useRef(false)
   useEffect(() => {
-    if (!open) return
-    const routine = seed.current
+    if (!open) {
+      wasOpen.current = false
+      return
+    }
+    if (wasOpen.current) return
+    wasOpen.current = true
+    const routine = value
     const start = routine?.startDate || todayIso()
     setFreq(routine?.freq ?? 'daily')
     setEvery(routine?.interval ?? 1)
@@ -73,7 +76,7 @@ export function RoutineSheet({
     setEndMode(routine?.count ? 'after' : routine?.until ? 'on' : 'never')
     setUntil(routine?.until ?? '')
     setCount(routine?.count ?? 10)
-  }, [open])
+  }, [open, value])
 
   const draft: Routine = useMemo(
     () => ({
@@ -88,8 +91,15 @@ export function RoutineSheet({
     [freq, every, weekdays, startDate, time, endMode, until, count],
   )
 
-  // A weekly rule with every weekday switched off can't land anywhere, so block saving it.
-  const valid = freq !== 'weekly' || weekdays.length > 0
+  // A weekly rule with no weekday can't land anywhere, and "ends on a date" with no date would
+  // save as an endless routine. Either way, name what is missing instead of saving something else.
+  const missing =
+    freq === 'weekly' && weekdays.length === 0
+      ? 'Pick at least one day'
+      : endMode === 'on' && !until
+        ? 'Pick the day it ends'
+        : null
+  const valid = missing === null
   const preview = useMemo(() => {
     if (!valid) return []
     const from = nextOccurrenceKey(draft, startDate) ?? startDate
@@ -243,7 +253,7 @@ export function RoutineSheet({
         <div className="rounded-2xl bg-cream-deep p-3.5">
           <p className="flex items-center gap-2 font-semibold text-ink">
             <Repeat size={15} className="shrink-0 text-ink-soft" />
-            {valid ? routineSummary(draft, t) : t('Pick at least one day')}
+            {valid ? routineSummary(draft, t) : t(missing)}
           </p>
           {preview.length > 0 && (
             <p className="mt-1 text-sm text-ink-soft">

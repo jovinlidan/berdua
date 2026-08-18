@@ -31,10 +31,15 @@ function toIcsUtc(ms: number): string {
   )
 }
 
-/** epoch ms → local "YYYYMMDD". A DATE value carries no time, so the local day is the point. */
-function toIcsDate(ms: number): string {
+/** epoch ms → local "YYYYMMDD", optionally N whole days later. A DATE value carries no time. */
+function toIcsDate(ms: number, plusDays = 0): string {
   const d = new Date(ms)
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`
+  // Date arithmetic, not `+ 86_400_000`: on a DST fall-back day the local day is 25 hours long, so
+  // adding a fixed day landed back on the SAME date, giving DTEND == DTSTART. Calendars reject that
+  // (RFC 5545 §3.6.1 wants DTEND > DTSTART for DATE values), so the export silently imported as
+  // nothing at all.
+  const shifted = new Date(d.getFullYear(), d.getMonth(), d.getDate() + plusDays)
+  return `${shifted.getFullYear()}${pad(shifted.getMonth() + 1)}${pad(shifted.getDate())}`
 }
 
 /** RFC 5545 text escaping. */
@@ -54,7 +59,7 @@ export function buildDateIcs(input: DateIcsInput): string {
     `DTSTAMP:${toIcsUtc(input.stamp ?? Date.now())}`,
     ...(timed
       ? [`DTSTART:${toIcsUtc(start)}`, `DTEND:${toIcsUtc(start + durationMin * 60_000)}`]
-      : [`DTSTART;VALUE=DATE:${toIcsDate(start)}`, `DTEND;VALUE=DATE:${toIcsDate(start + 86_400_000)}`]),
+      : [`DTSTART;VALUE=DATE:${toIcsDate(start)}`, `DTEND;VALUE=DATE:${toIcsDate(start, 1)}`]),
     ...(input.rrule ? [`RRULE:${input.rrule}`] : []),
     `SUMMARY:${esc(title)}`,
     ...(location ? [`LOCATION:${esc(location)}`] : []),

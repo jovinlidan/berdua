@@ -15,7 +15,6 @@ import { PARTNER_COLORS, partnerName } from '../lib/partners'
 import { useSession } from '../store/useSession'
 import type { SealedNote } from '../types'
 
-
 function defaultUnlock(): string {
   const d = new Date(Date.now() + 30 * 86_400_000) // a month out
   return format(d, 'yyyy-MM-dd')

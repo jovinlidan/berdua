@@ -8,7 +8,7 @@ export interface Accent {
 }
 
 export const ACCENTS: Accent[] = [
-  { key: 'coral', label: 'Coral', coral: '#e8927c', deep: '#d87862' },
+  { key: 'coral', label: 'Coral', coral: '#e0836b', deep: '#c86a51' },
   { key: 'rose', label: 'Rose', coral: '#e07a9b', deep: '#c9628a' },
   { key: 'sunset', label: 'Sunset', coral: '#e8915f', deep: '#d2724e' },
   { key: 'honey', label: 'Honey', coral: '#e0a93f', deep: '#c8902a' },

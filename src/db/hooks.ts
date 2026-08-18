@@ -5,9 +5,8 @@ import { todayIso } from '../lib/dates'
 import {
   addDaysKey,
   isOccurrenceDone,
+  localOccurrenceInstant,
   nextOccurrenceKey,
-  localTzOffset,
-  occurrenceInstant,
   occurrenceKeys,
   occursOn,
   withinLimits,
@@ -43,11 +42,12 @@ export const useRoutines = () =>
   useLiveQuery(async () => {
     const today = todayIso()
     const rows = (await db.todos.toArray()).filter((r) => r.routine)
-    return rows.sort((a, b) => {
-      const an = a.routine ? (nextOccurrenceKey(a.routine, today) ?? '9999-12-31') : '9999-12-31'
-      const bn = b.routine ? (nextOccurrenceKey(b.routine, today) ?? '9999-12-31') : '9999-12-31'
-      return an === bn ? a.createdAt - b.createdAt : an < bn ? -1 : 1
-    })
+    // Expand each rule ONCE: called from inside the comparator it would re-walk the calendar on
+    // every comparison.
+    return rows
+      .map((row) => ({ row, next: (row.routine && nextOccurrenceKey(row.routine, today)) || '9999-12-31' }))
+      .sort((a, b) => (a.next === b.next ? a.row.createdAt - b.row.createdAt : a.next < b.next ? -1 : 1))
+      .map((entry) => entry.row)
   })
 
 // To-dos pinned to a place — the dots on the Map screen. Newest first.
@@ -88,14 +88,13 @@ export interface RoutineToday {
 export const useRoutinesToday = () =>
   useLiveQuery<RoutineToday[]>(async () => {
     const today = todayIso()
-    const tz = localTzOffset()
     const todos = await db.todos.toArray()
     return todos
       .filter((t) => !t.done && t.routine && occursOn(t.routine, today) && withinLimits(t.routine, today))
       .map((t) => ({
         todo: t,
         dayKey: today,
-        at: occurrenceInstant(today, t.routine?.time, tz),
+        at: localOccurrenceInstant(today, t.routine?.time),
         done: isOccurrenceDone(t, today),
       }))
       .sort((a, b) => a.at - b.at)
@@ -128,7 +127,6 @@ export const useCalendarEvents = (fromKey?: string, toKey?: string) =>
     const today = todayIso()
     const from = fromKey ?? addDaysKey(today, -62)
     const to = toKey ?? addDaysKey(today, 366)
-    const tz = localTzOffset()
     const [todos, capsules] = await Promise.all([db.todos.toArray(), db.sealedNotes.toArray()])
     const events: CalendarEvent[] = []
     for (const t of todos) {
@@ -138,7 +136,7 @@ export const useCalendarEvents = (fromKey?: string, toKey?: string) =>
             id: `${t.id}#${day}`,
             sourceId: t.id,
             type: 'routine',
-            at: occurrenceInstant(day, t.routine.time, tz),
+            at: localOccurrenceInstant(day, t.routine.time),
             title: t.title,
             subtitle: t.note,
             done: isOccurrenceDone(t, day),

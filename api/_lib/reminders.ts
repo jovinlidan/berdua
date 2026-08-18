@@ -62,11 +62,11 @@ export function dueReminders(doc: SyncDoc, nowMs: number): ReminderEvent[] {
   // 1b) routine occurrences. The rule is expanded in the couple's LOCAL calendar (a routine means
   // "07:00 where they live", not a fixed instant), and each day gets its own dedupe key so a
   // repeating activity nudges every time it comes around, and only for days still unticked.
+  const windowFrom = dayKeyOf(nowMs - 7 * HOUR, tz)
+  const windowTo = dayKeyOf(nowMs + HOUR, tz)
   for (const todo of doc.todos) {
     if (todo.done || !todo.routine?.time) continue // all-day routine → nothing to nudge at
-    const from = dayKeyOf(nowMs - 7 * HOUR, tz)
-    const to = dayKeyOf(nowMs + HOUR, tz)
-    for (const day of occurrenceKeys(todo.routine, from, to, 8)) {
+    for (const day of occurrenceKeys(todo.routine, windowFrom, windowTo, 8)) {
       if (isOccurrenceDone(todo, day)) continue // already checked off together
       const at = occurrenceInstant(day, todo.routine.time, tz)
       if (nowMs < at - 30 * 60_000 || nowMs >= at + 6 * HOUR) continue

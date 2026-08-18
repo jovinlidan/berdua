@@ -12,7 +12,6 @@ import { useSession } from '../store/useSession'
 import type { Place, Todo } from '../types'
 import { BottomSheet } from './BottomSheet'
 
-
 export function PlaceSearchSheet({
   open,
   onClose,

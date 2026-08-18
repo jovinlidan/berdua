@@ -107,16 +107,6 @@ export function monthsBetween(a: DayKey, b: DayKey): number {
   return (pb.y - pa.y) * 12 + (pb.m - pa.m)
 }
 
-/** Add months, clamping to the shorter month (31 Jan + 1 month → 28/29 Feb). */
-export function addMonthsKey(key: DayKey, n: number): DayKey {
-  const p = parseKey(key)
-  if (!p) return key
-  const total = p.y * 12 + (p.m - 1) + n
-  const y = Math.floor(total / 12)
-  const m = (total % 12) + 1
-  return `${y}-${pad2(m)}-${pad2(Math.min(p.d, daysInMonth(y, m)))}`
-}
-
 /** 'HH:mm' → minutes after local midnight, or null when absent/invalid. */
 export function parseTime(time?: string): number | null {
   const match = /^(\d{1,2}):(\d{2})$/.exec(time ?? '')
@@ -133,6 +123,19 @@ export function occurrenceInstant(key: DayKey, time: string | undefined, tzOffse
   if (!p) return NaN
   const minutes = parseTime(time) ?? 0 // all-day → local midnight
   return utcOf(p) + (minutes - tzOffsetMinutes) * 60_000
+}
+
+/**
+ * The instant an occurrence happens on THIS device, using the offset actually in force on that
+ * date. `occurrenceInstant` takes a fixed offset because the cron only has the couple's stored one;
+ * on the client that snapshot would drift a whole hour (and sometimes a whole day) across a DST
+ * boundary, so anything rendered locally goes through here instead.
+ */
+export function localOccurrenceInstant(key: DayKey, time?: string): number {
+  const p = parseKey(key)
+  if (!p) return NaN
+  const minutes = parseTime(time) ?? 0
+  return new Date(p.y, p.m - 1, p.d, Math.floor(minutes / 60), minutes % 60).getTime()
 }
 
 /** Fill in the defaults a stored rule may leave implicit, and clamp anything nonsensical. */
@@ -182,6 +185,31 @@ function hits(routine: Routine, key: DayKey): boolean {
   }
 }
 
+/**
+ * 1-based position of `key` in the series, or null when the rule doesn't land on it. Arithmetic on
+ * purpose: resolving a `count` limit by walking from the start date used to break for series longer
+ * than the scan window, which silently dropped a routine out of "today" and off Home.
+ */
+export function occurrenceOrdinal(routine: Routine, key: DayKey): number | null {
+  const r = normalizeRoutine(routine)
+  if (!isDayKey(key) || !isDayKey(r.startDate) || !hits(r, key)) return null
+  switch (r.freq) {
+    case 'daily':
+      return Math.floor(daysBetween(r.startDate, key) / r.interval) + 1
+    case 'weekly': {
+      const days = routineWeekdays(r)
+      const startWeekday = weekdayOf(r.startDate)
+      // The first week is partial: only the chosen days at or after the start weekday happen.
+      const firstWeek = days.filter((d) => d >= startWeekday)
+      const cycles = Math.floor((weekIndex(key) - weekIndex(r.startDate)) / r.interval)
+      if (cycles === 0) return firstWeek.indexOf(weekdayOf(key)) + 1
+      return firstWeek.length + (cycles - 1) * days.length + days.indexOf(weekdayOf(key)) + 1
+    }
+    case 'monthly':
+      return Math.floor(monthsBetween(r.startDate, key) / r.interval) + 1
+  }
+}
+
 /** Does the rule land on that day? (ignores `until`/`count`; see `occurrenceKeys` for those) */
 export function occursOn(routine: Routine, key: DayKey): boolean {
   const r = normalizeRoutine(routine)
@@ -204,17 +232,14 @@ export function occurrenceKeys(
   const end = r.until && r.until < toKey ? r.until : toKey
   if (end < r.startDate) return []
 
-  // A `count` limit is an ORDINAL rule, so it can only be resolved by walking from the very first
-  // occurrence. Without one we start the walk at the window and stay cheap.
   const limit = r.count ?? null
-  let key = limit !== null || fromKey < r.startDate ? r.startDate : fromKey
+  let key = fromKey < r.startDate ? r.startDate : fromKey
   const out: DayKey[] = []
-  let seen = 0
   for (let i = 0; i <= SCAN_LIMIT_DAYS && key <= end && out.length < cap; i++) {
     if (hits(r, key)) {
-      seen++
-      if (key >= fromKey) out.push(key)
-      if (limit && seen >= limit) break
+      // Ordinals rise monotonically, so the first one past the limit ends the series.
+      if (limit !== null && (occurrenceOrdinal(r, key) ?? Infinity) > limit) break
+      out.push(key)
     }
     key = addDaysKey(key, 1)
   }
@@ -226,18 +251,22 @@ export function nextOccurrenceKey(routine: Routine, fromKey: DayKey): DayKey | n
   return occurrenceKeys(routine, fromKey, addDaysKey(fromKey, 366 * 3), 1)[0] ?? null
 }
 
-/** The last occurrence on or before `toKey`, searching back `withinDays`. */
-export function lastOccurrenceKey(routine: Routine, toKey: DayKey, withinDays = 45): DayKey | null {
-  const keys = occurrenceKeys(routine, addDaysKey(toKey, -withinDays), toKey)
-  return keys.length ? keys[keys.length - 1] : null
-}
-
-/** How many occurrences the routine plans in total. Null when it's open-ended. */
+/**
+ * How many occurrences the routine plans in total. Null when it's open-ended. The `until` case is
+ * counted by the LAST occurrence's ordinal, not by collecting them: collecting stopped at the
+ * expansion cap, so a two-year daily routine used to report 400 instead of 730.
+ */
 export function occurrenceTotal(routine: Routine): number | null {
   const r = normalizeRoutine(routine)
   if (r.count) return r.count
-  if (!r.until) return null
-  return occurrenceKeys(r, r.startDate, r.until).length
+  if (!r.until || r.until < r.startDate) return r.until ? 0 : null
+  // Any legal rule repeats at least once a year, so the last occurrence is within 366 days of the
+  // end; walking back from there is bounded no matter how long the series is.
+  for (let key = r.until, i = 0; i <= 366 && key >= r.startDate; i++, key = addDaysKey(key, -1)) {
+    const ordinal = occurrenceOrdinal(r, key)
+    if (ordinal !== null) return ordinal
+  }
+  return 0
 }
 
 // ── Per-occurrence ticks ───────────────────────────────────────────────────────
@@ -300,16 +329,17 @@ export function withinLimits(routine: Routine, key: DayKey): boolean {
   if (key < r.startDate) return false
   if (r.until && key > r.until) return false
   if (!r.count) return true
-  return occurrenceKeys(r, r.startDate, key).includes(key)
+  const ordinal = occurrenceOrdinal(r, key)
+  return ordinal !== null && ordinal <= r.count
 }
 
 /** Ticked-off occurrences against the plan. `total` is null for an open-ended routine. */
 export function routineProgress(todo: RoutineTodo): { done: number; total: number | null } {
   if (!todo.routine) return { done: 0, total: null }
   const r = normalizeRoutine(todo.routine)
-  const done = Object.entries(todo.routineLog ?? {}).filter(
-    ([key, tick]) => tick.done && hits(r, key) && (!r.until || key <= r.until),
-  ).length
+  // Only ticks on days the rule still covers count, so lowering `count` or `until` after ticking
+  // can never report more done than planned.
+  const done = Object.entries(todo.routineLog ?? {}).filter(([key, tick]) => tick.done && withinLimits(r, key)).length
   return { done, total: occurrenceTotal(r) }
 }
 
@@ -327,13 +357,6 @@ export function routineStreak(todo: RoutineTodo, todayKey: DayKey): number {
     streak++
   }
   return streak
-}
-
-/** True when this row is "done for now": its current occurrence for a routine, `done` otherwise. */
-export function isTodoDoneNow(todo: Pick<Todo, 'done' | 'routine' | 'routineLog'>, todayKey: DayKey): boolean {
-  if (todo.done) return true
-  if (!todo.routine) return false
-  return isOccurrenceDone(todo, routineActiveKey(todo.routine, todayKey))
 }
 
 // ── Labels + calendar export ───────────────────────────────────────────────────
@@ -389,14 +412,23 @@ export function routineSummary(routine: Routine, t: Translate = interpolate): st
 }
 
 /** The RFC 5545 RRULE for a routine, so one .ics repeats in the phone's own calendar app. */
-export function toRRule(routine: Routine): string {
+export function toRRule(routine: Routine, opts: { dateOnlyUntil?: boolean } = {}): string {
   const r = normalizeRoutine(routine)
   const parts = [`FREQ=${r.freq.toUpperCase()}`]
   if (r.interval > 1) parts.push(`INTERVAL=${r.interval}`)
   if (r.freq === 'weekly') parts.push(`BYDAY=${routineWeekdays(r).map((d) => ICS_WEEKDAYS[d]).join(',')}`)
-  if (r.freq === 'monthly') parts.push(`BYMONTHDAY=${parseKey(r.startDate)?.d ?? 1}`)
+  if (r.freq === 'monthly') {
+    const day = parseKey(r.startDate)?.d ?? 1
+    // Past the 28th the app clamps to the last day of a short month, which plain BYMONTHDAY cannot
+    // express: "day, or the last one if the month is shorter" is BYMONTHDAY=<d>,-1 + BYSETPOS=1.
+    parts.push(day >= 29 ? `BYMONTHDAY=${day},-1;BYSETPOS=1` : `BYMONTHDAY=${day}`)
+  }
   if (r.count) parts.push(`COUNT=${r.count}`)
-  // UNTIL must be UTC when DTSTART is (RFC 5545 §3.3.10); end-of-day keeps the last day inclusive.
-  else if (r.until) parts.push(`UNTIL=${r.until.replace(/-/g, '')}T235959Z`)
+  // RFC 5545 §3.3.10: UNTIL must carry the same value type as DTSTART, so an all-day series gets a
+  // bare DATE while a timed one gets a UTC DATE-TIME at end of day (keeping the last day inclusive).
+  else if (r.until) {
+    const day = r.until.replace(/-/g, '')
+    parts.push(`UNTIL=${opts.dateOnlyUntil ? day : `${day}T235959Z`}`)
+  }
   return parts.join(';')
 }

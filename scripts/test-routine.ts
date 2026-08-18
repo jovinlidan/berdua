@@ -8,6 +8,8 @@ import { buildDateIcs } from '../src/lib/calendar'
 import {
   dayKeyOf,
   isOccurrenceDone,
+  localOccurrenceInstant,
+  occurrenceOrdinal,
   mergeRoutineLogs,
   nextOccurrenceKey,
   occurrenceInstant,
@@ -20,6 +22,7 @@ import {
   routineSummary,
   sameRoutineLog,
   toRRule,
+  withinLimits,
 } from '../src/lib/recurrence'
 import { todoIcsInput } from '../src/lib/todoIcs'
 import type { Routine, RoutineLog, SyncDoc, SyncSnapshot, Todo } from '../src/types'
@@ -129,6 +132,47 @@ assert.ok(occursOn(rule({ freq: 'weekly', weekdays: [1] }), '2026-06-08'))
 assert.ok(!occursOn(rule({ freq: 'weekly', weekdays: [1] }), '2026-06-09'))
 ok('occursOn answers a single day without expanding the series')
 
+// ── Ordinals: where a day sits in the series (arithmetic, not a walk) ─────────
+assert.equal(occurrenceOrdinal(rule(), '2026-06-01'), 1)
+assert.equal(occurrenceOrdinal(rule(), '2026-06-10'), 10)
+assert.equal(occurrenceOrdinal(rule({ interval: 3 }), '2026-06-10'), 4)
+assert.equal(occurrenceOrdinal(rule({ interval: 3 }), '2026-06-11'), null)
+ok('ordinal of a daily occurrence, and null off-rule')
+
+// start Mon 1 Jun; Tue+Thu means the first week only holds Tue and Thu
+assert.equal(occurrenceOrdinal(rule({ freq: 'weekly', weekdays: [2, 4] }), '2026-06-02'), 1)
+assert.equal(occurrenceOrdinal(rule({ freq: 'weekly', weekdays: [2, 4] }), '2026-06-04'), 2)
+assert.equal(occurrenceOrdinal(rule({ freq: 'weekly', weekdays: [2, 4] }), '2026-06-09'), 3)
+ok('ordinal counts a multi-day week in order')
+
+// a start day AFTER some of the chosen weekdays: that first week is partial
+assert.equal(occurrenceOrdinal(rule({ freq: 'weekly', weekdays: [1, 5], startDate: '2026-06-05' }), '2026-06-05'), 1)
+assert.equal(occurrenceOrdinal(rule({ freq: 'weekly', weekdays: [1, 5], startDate: '2026-06-05' }), '2026-06-08'), 2)
+ok('ordinal handles a partial first week')
+
+assert.equal(occurrenceOrdinal(rule({ freq: 'monthly', startDate: '2026-01-31' }), '2026-04-30'), 4)
+ok('ordinal of a clamped monthly occurrence')
+
+// A long count-limited series used to fall outside its own limits once the day-by-day walk ran out.
+assert.ok(withinLimits(rule({ freq: 'monthly', startDate: '2015-01-18', count: 400 }), '2026-08-18'))
+ok('a count limit still holds a decade into the series')
+
+assert.equal(occurrenceTotal(rule({ startDate: '2026-01-01', until: '2027-12-31' })), 730)
+ok('an `until` two years out totals 730, not the expansion cap')
+
+assert.equal(occurrenceTotal(rule({ freq: 'weekly', weekdays: [2, 4], startDate: '2026-06-01', until: '2026-06-30' })), 9)
+ok('`until` totals count only the chosen weekdays')
+
+// lowering the plan after ticking must not report more done than planned
+const overTicked = routineTodo({
+  routine: rule({ count: 2 }),
+  routineLog: log({ '2026-06-01': [true, 1], '2026-06-02': [true, 2], '2026-06-03': [true, 3] }),
+})
+const overProgress = routineProgress(overTicked)
+assert.ok(overProgress.done <= (overProgress.total ?? Infinity))
+assert.deepEqual(overProgress, { done: 2, total: 2 })
+ok('progress never exceeds the plan')
+
 // ── Timezone handling (the cron only knows the couple's stored offset) ─────────
 const jakarta = 7 * 60
 assert.equal(occurrenceInstant('2026-06-01', '07:00', jakarta), Date.UTC(2026, 5, 1, 0, 0))
@@ -196,6 +240,15 @@ ok('off-day: the tap falls back to the most recent occurrence')
 assert.equal(routineActiveKey(rule({ startDate: '2026-07-01' }), '2026-06-10'), '2026-07-01')
 ok('before it starts: the tap targets the first upcoming occurrence')
 
+// The client renders with the offset in force on THAT date, so a routine keeps its wall-clock
+// time (and its calendar day) across a DST boundary.
+for (const day of ['2026-07-01', '2026-12-25']) {
+  const at = new Date(localOccurrenceInstant(day, '07:00'))
+  assert.equal(`${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`, day)
+  assert.equal(at.getHours(), 7)
+}
+ok(`07:00 stays 07:00 on the right day either side of a DST change (TZ=${process.env.TZ ?? '(system)'})`)
+
 // ── Calendar export ────────────────────────────────────────────────────────────
 assert.equal(toRRule(rule()), 'FREQ=DAILY')
 assert.equal(toRRule(rule({ interval: 2 })), 'FREQ=DAILY;INTERVAL=2')
@@ -220,6 +273,22 @@ ok('a routine with no time exports as an all-day series')
 
 assert.equal(todoIcsInput(routineTodo({ routine: undefined })), null)
 ok('an undated one-off has nothing to export')
+
+// an all-day series must end on the NEXT day, or calendars drop the event
+const dtstart = /DTSTART;VALUE=DATE:(\d{8})/.exec(allDayIcs)?.[1]
+const dtend = /DTEND;VALUE=DATE:(\d{8})/.exec(allDayIcs)?.[1]
+assert.ok(dtstart && dtend && Number(dtend) > Number(dtstart))
+ok('all-day DTEND is strictly after DTSTART')
+
+// UNTIL has to carry DTSTART's value type (RFC 5545 §3.3.10)
+assert.equal(toRRule(rule({ until: '2026-12-31' }), { dateOnlyUntil: true }), 'FREQ=DAILY;UNTIL=20261231')
+assert.equal(toRRule(rule({ until: '2026-12-31' })), 'FREQ=DAILY;UNTIL=20261231T235959Z')
+ok('an all-day series exports a DATE-valued UNTIL, a timed one a UTC DATE-TIME')
+
+// the app clamps "monthly on the 31st" to short months, so the RRULE has to say so too
+assert.equal(toRRule(rule({ freq: 'monthly', startDate: '2026-01-31' })), 'FREQ=MONTHLY;BYMONTHDAY=31,-1;BYSETPOS=1')
+assert.equal(toRRule(rule({ freq: 'monthly', startDate: '2026-01-15' })), 'FREQ=MONTHLY;BYMONTHDAY=15')
+ok('a late-month rule exports the clamp, an early-month one stays plain')
 
 // ── Labels ─────────────────────────────────────────────────────────────────────
 assert.equal(routineSummary(rule()), 'Every day')

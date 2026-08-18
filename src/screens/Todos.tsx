@@ -22,7 +22,6 @@ import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
 import type { Couple, Todo, TodoGroup } from '../types'
 
-
 /** epoch ms → a value the <input type="datetime-local"> understands (local time, no seconds). */
 function toLocalInput(ms?: number): string {
   if (!ms) return ''

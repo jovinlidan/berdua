@@ -60,6 +60,25 @@ one. Piping a build/test/lint through `tail`/`grep`/`head` hides its real succes
 `pnpm build > /tmp/out.log 2>&1; echo "EXIT:$?"; tail -25 /tmp/out.log` (or set `pipefail`). Always
 read the actual EXIT line, not the harness's wrapper exit code, before declaring a step green.
 
+## 2026-08-18: Never replace "from this marker to end of file" in a stylesheet
+
+**Context:** The visual rebuild swapped the `@layer components { … }` block in `src/index.css` by
+slicing from `s.index('@layer components {')` to the END of the file. Three unrelated blocks lived
+after it and were silently deleted: the MapLibre marker CSS (`.place-pin*`, `.user-dot`), the iOS
+date/time input reset, and the global `prefers-reduced-motion` rule.
+
+**Lesson:** Nothing failed. `tsc`, `pnpm build`, `pnpm lint` and every logic test stayed green,
+because deleted CSS has no compiler and the consumers were plain class strings
+(`class="place-pin"`, `class="user-dot"`) in a file nobody touched. The result was invisible map
+pins, an invisible location dot, date inputs overflowing their container on iOS, and animations for
+people who asked for less motion.
+
+**How to apply:** Edit stylesheets by replacing the exact block, never by slicing to EOF. After any
+CSS restructure, diff the class names against the old file
+(`git show main:src/index.css | grep -oE '^\.[a-z-]+' | sort -u`) and confirm every one still
+exists or is genuinely unused (`grep -rn "place-pin" src/`). Screenshot the screens that own bespoke
+CSS (here: the map) rather than only the screens you meant to change.
+
 ## 2026-08-17: A `.ts` module run by plain `node` may not gain relative imports
 **Context:** `scripts/test-ics.mjs` runs under bare `node` and imports `src/lib/calendar.ts`
 directly. Adding `import { … } from './recurrence'` to `calendar.ts` broke that script with

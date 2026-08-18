@@ -7,7 +7,6 @@ import { notificationSupport, requestPermission, subscribeToPush } from '../lib/
 import { useSession } from '../store/useSession'
 import { joinCouple } from '../sync/sync'
 
-
 export default function Welcome() {
   const t = useT()
   const navigate = useNavigate()

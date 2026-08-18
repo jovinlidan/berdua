@@ -83,7 +83,7 @@ pnpm exec tsx scripts/test-pet.ts
 pnpm exec tsx scripts/test-routine.ts
 ```
 
-The build, API type-check, and logic checks are expected to pass. `pnpm lint` currently reports 15
+The build, API type-check, and logic checks are expected to pass. `pnpm lint` currently reports 14
 known errors; cleaning that baseline is tracked in [tasks/todo.md](./tasks/todo.md). Do not introduce
 additional lint errors in new work.
 
