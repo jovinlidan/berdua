@@ -224,6 +224,93 @@ input[type='datetime-local']::-webkit-date-and-time-value {
 }
 
 /* respect users who prefer less motion */
+/* The roaming pet's motion. These loops never stop, so they run as CSS keyframes rather than
+   JS-driven springs: transform and opacity animate on the compositor, costing no main-thread time,
+   where a framer-motion `repeat: Infinity` writes a style and re-renders on every single frame.
+   The reduced-motion block below freezes all of them. */
+@keyframes pet-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+@keyframes pet-wiggle {
+  0%,
+  100% {
+    transform: rotate(-7deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+@keyframes pet-squash {
+  0%,
+  100% {
+    transform: scaleX(1);
+  }
+  50% {
+    transform: scaleX(0.85);
+  }
+}
+@keyframes pet-hatch {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-8deg);
+  }
+  75% {
+    transform: rotate(8deg);
+  }
+}
+/* Sprite-sheet walk cycle: step background-position-x across the row. `jump-none` is what makes
+   the frame count come out right: it holds both 0% (first frame) and 100% (last frame). */
+@keyframes pet-sprite {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: 100%;
+  }
+}
+.pet-bob {
+  animation: pet-bob 1.8s ease-in-out infinite;
+}
+.pet-wiggle {
+  animation: pet-wiggle 0.4s ease-in-out infinite;
+}
+.pet-shadow-walk {
+  animation: pet-squash 0.4s ease-in-out infinite;
+}
+.pet-shadow-held {
+  transform: scaleX(0.7);
+  opacity: 0.4;
+}
+.pet-hatch {
+  animation: pet-hatch 2.4s ease-in-out infinite;
+}
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+.float-slow {
+  animation: float-slow 3.2s ease-in-out infinite;
+}
+/* duration + step count come from the sprite's own frame data (see PixelPet) */
+.pet-sprite {
+  animation-name: pet-sprite;
+  animation-iteration-count: infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

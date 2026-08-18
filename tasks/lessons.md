@@ -186,3 +186,53 @@ reliable, region-independent, no API). Accept coords-bearing URLs via a fast pat
 redirect-followed links, extract ONLY place-specific signals (`!3d!4d`, `q=`, embedded place data),
 NEVER the `@`/`ll`/`center` viewport, and return null instead of a guess. Add a distance-from-home
 backstop so a bad resolve is rejected, not pinned. Verify from the real server/region, not just local.
+
+## 2026-08-18: `tsc --noEmit` checks nothing in this repo; only `tsc -b` does
+**Context:** Mid-refactor I ran `npx tsc --noEmit` four times and it exited 0 every time. Then
+`pnpm build` immediately reported two real errors in the file I'd just changed: an out-of-scope
+function reference and a dead declaration. The root tsconfig is solution-style (`"files": []` plus
+`references`), so a bare `tsc --noEmit` type-checks an empty file list and cheerfully succeeds.
+
+**Lesson:** A green typecheck from the wrong entry point is worse than no typecheck. It buys false
+confidence and lets a broken refactor reach the browser. eslint didn't catch the scope error either
+(it flagged only the *unused* half, which read as a harmless warning).
+
+**How to apply:** Verify with `pnpm build` (which runs `tsc -b`) or `npx tsc -b` in this repo. Never
+take `tsc --noEmit` as proof here. And when a refactor moves code between components, the reference
+that breaks is the one that *silently resolved to an outer scope*, so check both sides of every
+moved helper. [[hooks-live-above-the-early-return]]
+
+## 2026-08-18: Hooks must sit above the screen's `if (!couple) return null` guard
+**Context:** Adding a `useCallback` to the Wishlist screen, I placed it next to the handler it
+replaced, which happened to sit *below* `if (!couple) return null`. Types passed, lint passed, the
+dev server hot-reloaded fine. The production build crashed the whole screen with minified React
+error #310 ("rendered more hooks than during the previous render"): on the first render `couple` is
+undefined, so the guard returned before the hook ever ran.
+
+**Lesson:** These screens all early-return on a loading hook result, which makes every line below
+that guard a hooks-hostile zone. The failure is invisible to tsc, eslint and a warm HMR session, and
+only shows up on a cold load, which is exactly the path a real user takes.
+
+**How to apply:** Put every hook above the first `return` in the component, no exceptions, even when
+that separates it from the code it serves. After adding a hook to a screen, cold-load that screen
+once (a fresh page load, not HMR) before believing it works.
+
+## 2026-08-18: Measure paint cost before "fixing" it; the obvious suspects were all zero
+**Context:** Chasing reported jank, I had three confident suspects: a page-wide 3px tiled radial
+gradient, eight `backdrop-blur` layers, and heavy card shadows. A/B-ing each one with a runtime
+stylesheet override moved the total by **0ms**. The actual costs were somewhere else entirely: an
+un-promoted animating sheet (`will-change: transform` cut Paint 34→7ms and Raster 48→3ms), a pet whose
+`repeat: Infinity` framer-motion loops and 150ms `setInterval` sprite ran on every screen forever
+(idle Layerize 155→3ms once they became CSS keyframes), and input state living on a big screen
+component so each keystroke re-rendered 40 `layout` motion rows (65→33ms per keystroke).
+
+**Lesson:** Paint intuitions are unreliable. Cheap-looking CSS (gradients, blur, shadows) is
+rasterised once and reused; the real costs are *per-frame* work: anything unpromoted that animates,
+anything looping forever, and anything that re-renders a big subtree on every keystroke. Also: the
+first measurement of any interaction is polluted by first-mount and cold caches, so a lone "before"
+number will overstate the win by roughly 2x.
+
+**How to apply:** A/B with an injected `<style>` override before editing source. It takes a minute
+and kills whole hypotheses. Attribute with a trace aggregated by event name (UpdateLayoutTree, Layout,
+Paint, RasterTask, Layerize, Commit), not a single fps number. Always re-run the baseline *last* and
+discard the first rep. `scripts/test-perf.mjs` does all of this.

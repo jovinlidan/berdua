@@ -8,6 +8,7 @@ import { carePet, renamePet } from '../db/repo'
 import { haptic } from '../lib/haptics'
 import { useT } from '../lib/i18n'
 import { type PetAction, STAGE_LABEL, moodOf, settleStats, stageOf } from '../lib/pet'
+import { useOverlay } from '../store/useOverlay'
 import type { Pet } from '../types'
 import { BottomSheet } from './BottomSheet'
 import { Creature } from './Creature'
@@ -46,13 +47,7 @@ export function PetCompanion() {
           // action (the + on Bucket and Capsule), and this pill used to sit on top of it.
           className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-4 z-30 flex items-center gap-1.5 rounded-full bg-paper/95 py-2 pl-2.5 pr-3.5 text-sm font-bold text-ink shadow-[0_8px_24px_-8px_rgba(58,46,43,0.45)] ring-1 ring-ink/5 backdrop-blur active:scale-95"
         >
-          <motion.span
-            animate={{ rotate: [0, -8, 8, -8, 0] }}
-            transition={{ repeat: Infinity, duration: 2.4, ease: 'easeInOut' }}
-            className="text-lg"
-          >
-            🥚
-          </motion.span>
+          <span className="pet-hatch text-lg">🥚</span>
           {t('Adopt a pet')}
         </button>
         <PetAdoptSheet open={adopt} onClose={() => setAdopt(false)} />
@@ -92,10 +87,13 @@ function RoamingPet({ pet, now, index, onTap }: { pet: Pet; now: number; index: 
   const walkCtrl = useRef<AnimationPlaybackControls | null>(null)
   const pauseRef = useRef<number | undefined>(undefined)
 
+  const overlayOpen = useOverlay((s) => s.open > 0)
+
   const stage = stageOf(pet, now)
   const mood = moodOf(pet, now)
   const bubble = moodBubble(mood)
-  const still = prefersReducedMotion() || mood === 'sleepy' || stage === 'egg'
+  // `overlayOpen`: a sheet is covering the screen, so hold still and leave the frame to its spring.
+  const still = prefersReducedMotion() || overlayOpen || mood === 'sleepy' || stage === 'egg'
 
   useEffect(() => {
     const measure = () => {
