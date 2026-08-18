@@ -224,6 +224,58 @@ input[type='datetime-local']::-webkit-date-and-time-value {
 }
 
 /* respect users who prefer less motion */
+/* The bottom sheet's slide. Compositor-driven on purpose: these are transform and opacity only,
+   so the animation keeps the display's refresh rate (120Hz where the screen offers it) instead of
+   being stepped once per requestAnimationFrame by JavaScript on the main thread. Durations here are
+   mirrored by EXIT_MS in BottomSheet.tsx. */
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes sheet-out {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes scrim-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.sheet-panel {
+  /* the decelerating curve a phone sheet is expected to have: quick off the mark, soft arrival */
+  animation: sheet-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  will-change: transform;
+}
+.sheet-panel.is-closing {
+  animation: sheet-out 260ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+.sheet-scrim {
+  animation: scrim-in 260ms ease-out both;
+  will-change: opacity;
+}
+.sheet-scrim.is-closing {
+  animation: scrim-out 220ms ease-in both;
+}
+
 /* The roaming pet's motion. These loops never stop, so they run as CSS keyframes rather than
    JS-driven springs: transform and opacity animate on the compositor, costing no main-thread time,
    where a framer-motion `repeat: Infinity` writes a style and re-renders on every single frame.
