@@ -49,6 +49,7 @@ export default function Home() {
   const showAnniv = anniv && (anniv.isToday || anniv.daysUntil <= 45)
 
   const dreamsKept = (bucket ?? []).filter((b) => b.isComplete).length
+  const openDreams = (bucket ?? []).filter((b) => !b.isComplete).length
   const todosDone = (todos ?? []).filter((tt) => tt.done).length
   const capsuleCount = (sealedNotes ?? []).length
   const hasStats = dreamsKept + todosDone + capsuleCount > 0
@@ -225,6 +226,27 @@ export default function Home() {
           </Link>
         </motion.section>
       )}
+
+      {/* Bucket list: reached from here, not from the tab bar */}
+      <motion.section {...fade(0.26)} className="mt-4">
+        <Link to="/bucket" className="block">
+          <motion.div whileTap={{ scale: 0.99 }} className="card flex items-center gap-4 p-5">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gold/25 text-coral-deep">
+              <Star size={24} />
+            </span>
+            <div className="flex-1">
+              <p className="font-serif text-lg font-semibold text-ink">{t('Our bucket list')}</p>
+              <p className="text-sm text-ink-soft">
+                {openDreams > 0
+                  ? t('{n} to chase together', { n: openDreams })
+                  : dreamsKept > 0
+                    ? t('{n} kept together 💛', { n: dreamsKept })
+                    : t('Write down your first dream →')}
+              </p>
+            </div>
+          </motion.div>
+        </Link>
+      </motion.section>
 
       {/* Time capsules */}
       <motion.section {...fade(0.28)} className="mt-4">

@@ -475,6 +475,9 @@ export const ID: Record<string, string> = {
   // Bucket + Memories
   'Our bucket list': 'Daftar impian kita',
   '{n} to chase': '{n} untuk dikejar',
+  '{n} to chase together': '{n} untuk dikejar bersama',
+  '{n} kept together 💛': '{n} tercapai bersama 💛',
+  'Write down your first dream →': 'Tulis impian pertama kalian →',
   '{n} kept': '{n} tercapai',
   'dreams for the two of you': 'impian untuk kalian berdua',
   'No dreams yet': 'Belum ada impian',

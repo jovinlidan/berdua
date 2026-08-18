@@ -99,7 +99,7 @@ export default function Thinking() {
                   <div className={`max-w-[78%] ${mine ? 'items-end text-right' : 'items-start'} flex flex-col`}>
                     <div
                       className={`rounded-2xl px-4 py-2.5 ${
-                        mine ? 'rounded-br-md bg-coral text-white' : 'rounded-bl-md bg-cream-deep text-ink'
+                        mine ? 'rounded-br-md bg-coral-deep text-white' : 'rounded-bl-md bg-cream-deep text-ink'
                       }`}
                     >
                       <span className="font-script text-xl leading-snug">{p.message}</span>
@@ -157,7 +157,7 @@ export default function Thinking() {
               disabled={sending || !custom.trim()}
               onClick={() => send(custom)}
               aria-label={t('Send ping')}
-              className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral text-white transition active:scale-90 disabled:opacity-40"
+              className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral-deep text-white transition active:scale-90 disabled:opacity-40"
             >
               <Send size={20} />
             </button>

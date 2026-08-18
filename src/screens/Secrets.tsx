@@ -100,7 +100,7 @@ export default function Secrets() {
           onClick={add}
           disabled={!text.trim()}
           aria-label={t('Add secret')}
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral text-white transition active:scale-90 disabled:opacity-40"
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral-deep text-white transition active:scale-90 disabled:opacity-40"
         >
           <Plus size={24} />
         </button>

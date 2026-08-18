@@ -175,7 +175,7 @@ export default function Bucket() {
         type="button"
         onClick={() => setFormOpen(true)}
         aria-label={t('Add dream')}
-        className={`fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-coral text-white shadow-[0_12px_30px_-8px_rgba(232,146,124,0.9)] transition-opacity duration-200 active:scale-90 ${
+        className={`fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-coral-deep text-white shadow-[0_12px_30px_-10px_rgba(200,106,81,0.75)] transition-opacity duration-200 active:scale-90 ${
           formOpen || editing ? 'pointer-events-none opacity-0' : 'opacity-100'
         }`}
       >

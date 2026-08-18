@@ -25,9 +25,9 @@ for (const tt of ['Book cabin', 'Buy gift']) {
   await p.waitForTimeout(250)
 }
 
-const row = (t) => p.locator('div.relative:not(.card)', { has: p.getByText(t, { exact: true }) }).last()
+const row = (t) => p.locator('div.relative:not(.row)', { has: p.getByText(t, { exact: true }) }).last()
 async function swipe(t, dx) {
-  const box = await row(t).locator('div.card').boundingBox()
+  const box = await row(t).locator('div.row').boundingBox()
   const cx = box.x + box.width / 2
   const cy = box.y + box.height / 2
   await p.mouse.move(cx, cy)

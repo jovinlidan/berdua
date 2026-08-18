@@ -178,7 +178,7 @@ export default function Settings() {
               }}
               aria-pressed={lang === value}
               className={`flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold transition active:scale-95 ${
-                lang === value ? 'bg-coral text-white shadow-sm' : 'bg-cream-deep text-ink-soft'
+                lang === value ? 'bg-coral-deep text-white shadow-sm' : 'bg-cream-deep text-ink-soft'
               }`}
             >
               <Languages size={18} />
@@ -205,7 +205,7 @@ export default function Settings() {
               }}
               aria-pressed={themeMode === key}
               className={`flex flex-col items-center gap-1 rounded-2xl py-3 text-sm font-bold transition active:scale-95 ${
-                themeMode === key ? 'bg-coral text-white shadow-sm' : 'bg-cream-deep text-ink-soft'
+                themeMode === key ? 'bg-coral-deep text-white shadow-sm' : 'bg-cream-deep text-ink-soft'
               }`}
             >
               <Icon size={18} />
