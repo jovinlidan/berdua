@@ -1,6 +1,6 @@
 import { AnimatePresence, type PanInfo, animate, motion, useMotionValue } from 'framer-motion'
 import { AlignLeft, ArrowDown, ArrowUp, CalendarClock, CalendarPlus, Check, ChevronDown, Lock, MapPin, Navigation, Pencil, Plus, Repeat, Search, Tag, Trash2, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { celebrate } from '../lib/celebrate'
@@ -33,25 +33,16 @@ export default function Todos() {
   const todos = useWishlist()
   const groups = useTodoGroups()
   const couple = useCouple()
-  const { activePartner, collapsedTodoGroups, toggleTodoGroupCollapsed } = useSession()
+  // Selectors, not the whole store: this screen only cares about the collapsed-group list.
+  const collapsedTodoGroups = useSession((st) => st.collapsedTodoGroups)
+  const toggleTodoGroupCollapsed = useSession((st) => st.toggleTodoGroupCollapsed)
   const toast = useToast()
   const t = useT()
-  const [title, setTitle] = useState('')
-  const [note, setNote] = useState('')
-  const [showNote, setShowNote] = useState(false)
-  const [addCat, setAddCat] = useState<string | null>(null)
-  const [showDue, setShowDue] = useState(false)
-  const [due, setDue] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [newCat, setNewCat] = useState('')
   const [editGroup, setEditGroup] = useState<TodoGroup | null>(null)
   const [editLabel, setEditLabel] = useState('')
   const [editEmoji, setEditEmoji] = useState('')
   // editing an existing to-do (title / note / reminder)
   const [editTodo, setEditTodo] = useState<Todo | null>(null)
-  const [etTitle, setEtTitle] = useState('')
-  const [etNote, setEtNote] = useState('')
-  const [etDue, setEtDue] = useState('')
   const [pendingDelete, setPendingDelete] = useState<Todo | null>(null)
   // attaching/changing the place on a wishlist item (opens the shared place-search sheet)
   const [placeTodo, setPlaceTodo] = useState<Todo | null>(null)
@@ -69,94 +60,21 @@ export default function Todos() {
     if (donePct < 100) celebrated.current = false
   }, [donePct, allTodos.length])
 
+  // Stable identity on purpose: it is a prop of the memoized TodoRow, so a new function on every
+  // render would re-render all of them on every keystroke anywhere on this screen.
+  const openEdit = useCallback((t: Todo) => setEditTodo(t), [])
+
   if (!couple) return null
 
   const groupList = groups ?? []
   const list = todos ?? []
   const done = list.filter((t) => t.done)
   const total = list.length
-  const target = addCat ?? groupList[0]?.id ?? 'other'
   const groupIds = new Set(groupList.map((g) => g.id))
   // Completed tasks stay inside their own category (just sorted to the bottom, struck through) —
   // they are NOT moved to a separate "Done" section.
   const sortDoneLast = (arr: Todo[]) => [...arr].sort((a, b) => Number(a.done) - Number(b.done))
   const ungrouped = sortDoneLast(list.filter((t) => !groupIds.has(t.category)))
-
-  async function add() {
-    const text = title.trim()
-    if (!text) return
-    await addTodo({
-      title: text,
-      note: note.trim() || undefined,
-      category: target,
-      addedBy: activePartner,
-      dueAt: showDue && due ? new Date(due).getTime() : undefined,
-    })
-    setTitle('')
-    setNote('')
-    setShowNote(false)
-    setDue('')
-    setShowDue(false)
-    haptic(8)
-    const label = groupList.find((g) => g.id === target)?.label ?? t('list')
-    toast(t('Added to {cat}', { cat: label }))
-  }
-
-  /** Export a wishlist item to the phone's own calendar app (a routine goes as one RRULE event). */
-  function addToPhoneCalendar(todo: Todo) {
-    if (!downloadTodoIcs(todo)) return
-    haptic(6)
-    toast(t('Calendar file saved'), '🗓️')
-  }
-
-  function openEdit(t: Todo) {
-    setEditTodo(t)
-    setEtTitle(t.title)
-    setEtNote(t.note ?? '')
-    setEtDue(toLocalInput(t.dueAt))
-  }
-
-  async function saveEdit() {
-    if (!editTodo) return
-    const text = etTitle.trim()
-    if (!text) return
-    await updateTodo(editTodo.id, {
-      title: text,
-      note: etNote.trim() || undefined,
-      dueAt: etDue ? new Date(etDue).getTime() : undefined,
-    })
-    haptic(8)
-    toast(t('Saved'))
-    setEditTodo(null)
-  }
-
-  // Switch from the edit sheet to the place-search sheet, persisting any in-progress edits first
-  // so they aren't lost when the sheets swap.
-  async function openPlaceForEdit() {
-    if (!editTodo) return
-    const text = etTitle.trim()
-    if (text) {
-      await updateTodo(editTodo.id, {
-        title: text,
-        note: etNote.trim() || undefined,
-        dueAt: etDue ? new Date(etDue).getTime() : undefined,
-      })
-    }
-    const target = editTodo
-    setEditTodo(null)
-    setPlaceTodo(target)
-  }
-
-  async function createCategory() {
-    const name = newCat.trim()
-    if (!name) return
-    const id = await addTodoGroup(name)
-    setAddCat(id)
-    setNewCat('')
-    setCreating(false)
-    haptic(8)
-    toast(t('Category created'), '🏷️')
-  }
 
   return (
     <div data-surface="list" className="pt-[calc(0.4rem+env(safe-area-inset-top))]">
@@ -180,107 +98,7 @@ export default function Todos() {
         </Link>
       </div>
 
-      {/* quick add */}
-      <div className="card mb-3 p-3">
-        <div className="flex items-center gap-2">
-          <input
-            className="field"
-            placeholder={t('Add a task…')}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && add()}
-          />
-          <button
-            type="button"
-            onClick={add}
-            disabled={!title.trim()}
-            aria-label={t('Add to-do')}
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral-deep text-white transition active:scale-90 disabled:opacity-40"
-          >
-            <Plus size={24} />
-          </button>
-        </div>
-        <div className="mt-2.5 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setShowNote((v) => !v)}
-            className={`chip ${showNote || note.trim() ? 'bg-coral/15 text-coral-deep' : 'bg-cream-deep text-ink-soft'}`}
-          >
-            <AlignLeft size={14} /> {note.trim() ? t('Note added') : t('Add a note')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowDue((v) => !v)}
-            className={`chip ${showDue ? 'bg-coral/15 text-coral-deep' : 'bg-cream-deep text-ink-soft'}`}
-          >
-            <CalendarClock size={14} /> {showDue ? t('Reminder on') : t('Add a reminder')}
-          </button>
-        </div>
-        <AnimatePresence>
-          {showNote && (
-            <motion.textarea
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              rows={2}
-              placeholder={t('A little more detail… (optional)')}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="mt-2 w-full resize-none rounded-xl bg-cream-deep px-3 py-2 text-sm text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40"
-            />
-          )}
-        </AnimatePresence>
-        <AnimatePresence>
-          {showDue && (
-            <motion.input
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              type="datetime-local"
-              value={due}
-              onChange={(e) => setDue(e.target.value)}
-              className="mt-2 w-full rounded-xl bg-cream-deep px-3 py-1.5 text-sm text-ink outline-none"
-            />
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* category selector (where new tasks go) + create */}
-      <p className="mb-1.5 px-1 text-xs font-bold uppercase tracking-wide text-ink-soft">{t('New tasks go to')}</p>
-      <div className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-        {groupList.map((g) => (
-          <Chip key={g.id} active={target === g.id} color={g.tint} onClick={() => setAddCat(g.id)}>
-            {g.emoji} {g.label}
-          </Chip>
-        ))}
-        <Chip active={creating} color="#7c8a6f" onClick={() => setCreating((v) => !v)}>
-          <Tag size={13} /> {t('New')}
-        </Chip>
-      </div>
-      <AnimatePresence>
-        {creating && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="card mb-5 flex items-center gap-2 p-3">
-              <input
-                className="field"
-                placeholder={t('New category name…')}
-                value={newCat}
-                onChange={(e) => setNewCat(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && createCategory()}
-                autoFocus
-              />
-              <button type="button" className="btn-primary shrink-0" disabled={!newCat.trim()} onClick={createCategory}>
-                {t('Create')}
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <TodoComposer groups={groupList} />
 
       {/* grouped sections */}
       {list.length === 0 ? (
@@ -393,93 +211,16 @@ export default function Todos() {
       </BottomSheet>
 
       {/* edit a to-do (title / note / reminder) */}
-      <BottomSheet open={!!editTodo} onClose={() => setEditTodo(null)} title={t('Edit to-do')}>
-        {editTodo && (
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Task')}</label>
-              <input
-                className="field"
-                placeholder={t('What needs doing?')}
-                value={etTitle}
-                onChange={(e) => setEtTitle(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Note (optional)')}</label>
-              <textarea
-                rows={3}
-                className="w-full resize-none rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40"
-                placeholder={t('A little more detail…')}
-                value={etNote}
-                onChange={(e) => setEtNote(e.target.value)}
-              />
-            </div>
-            <div>
-                <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Reminder (optional)')}</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="datetime-local"
-                    className="field"
-                    value={etDue}
-                    onChange={(e) => setEtDue(e.target.value)}
-                  />
-                  {etDue && (
-                    <button
-                      type="button"
-                      onClick={() => setEtDue('')}
-                      aria-label={t('Clear reminder')}
-                      className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cream-deep text-ink-soft transition active:scale-90"
-                    >
-                      <X size={18} />
-                    </button>
-                  )}
-                </div>
-            </div>
-
-            <button type="button" className="btn-soft w-full" onClick={() => setMakeRoutine(true)}>
-              <Repeat size={16} /> {t('Make it a routine')}
-            </button>
-
-            {editTodo.dueAt && (
-              <button type="button" className="btn-soft w-full" onClick={() => addToPhoneCalendar(editTodo)}>
-                <CalendarPlus size={16} /> {t('Add to phone calendar')}
-              </button>
-            )}
-            <div>
-              <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Place (optional)')}</label>
-              {editTodo.place ? (
-                <div className="flex items-center gap-2 rounded-2xl bg-coral/10 px-3 py-2.5 ring-1 ring-coral/20">
-                  <MapPin size={16} className="shrink-0 text-coral" />
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{editTodo.place.name}</span>
-                  <button type="button" onClick={openPlaceForEdit} className="text-xs font-bold text-coral-deep active:opacity-70">
-                    {t('Change')}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t('Remove from map')}
-                    onClick={async () => {
-                      await clearTodoPlace(editTodo.id)
-                      haptic(6)
-                      setEditTodo({ ...editTodo, place: undefined })
-                    }}
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft/60 active:scale-90"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ) : (
-                <button type="button" className="btn-soft w-full" onClick={openPlaceForEdit}>
-                  <MapPin size={16} /> {t('Pin a place on the map')}
-                </button>
-              )}
-            </div>
-            <button type="button" className="btn-primary w-full" disabled={!etTitle.trim()} onClick={saveEdit}>
-              {t('Save changes')}
-            </button>
-          </div>
-        )}
-      </BottomSheet>
+      <TodoEditSheet
+        todo={editTodo}
+        onClose={() => setEditTodo(null)}
+        onTodoChange={setEditTodo}
+        onMakeRoutine={() => setMakeRoutine(true)}
+        onPinPlace={(target) => {
+          setEditTodo(null)
+          setPlaceTodo(target)
+        }}
+      />
 
       {/* attach / change a wishlist item's place (shared with the Map screen) */}
       <PlaceSearchSheet open={!!placeTodo} onClose={() => setPlaceTodo(null)} todo={placeTodo ?? undefined} />
@@ -602,8 +343,8 @@ function GroupSection({
                     todo={t}
                     tint={group.tint}
                     couple={couple}
-                        onEdit={() => onEditTodo(t)}
-                    onRequestDelete={() => onRequestDelete(t)}
+                    onEdit={onEditTodo}
+                    onRequestDelete={onRequestDelete}
                   />
                 ))}
               </AnimatePresence>
@@ -617,7 +358,13 @@ function GroupSection({
 
 const REVEAL = 84 // px each swipe action latches open to
 
-function TodoRow({
+/**
+ * memo matters here: this row is a `layout` motion component, so every render of it makes
+ * framer-motion measure its box. Multiply that by a long list and one keystroke in the composer or
+ * the edit sheet used to cost a full layout pass per row. The handlers take the todo as an argument
+ * so the props stay referentially stable and the bail-out actually happens.
+ */
+const TodoRow = memo(function TodoRow({
   todo,
   tint,
   couple,
@@ -627,8 +374,8 @@ function TodoRow({
   todo: Todo
   tint: string
   couple: Couple
-  onEdit: () => void
-  onRequestDelete: () => void
+  onEdit: (t: Todo) => void
+  onRequestDelete: (t: Todo) => void
 }) {
   const t = useT()
   const activePartner = useSession((s) => s.activePartner)
@@ -691,7 +438,7 @@ function TodoRow({
           onClick={() => {
             haptic(6)
             close()
-            onRequestDelete()
+            onRequestDelete(todo)
           }}
           className="flex w-[84px] flex-col items-center justify-center gap-0.5 bg-coral-deep text-xs font-bold text-white"
         >
@@ -742,7 +489,7 @@ function TodoRow({
           type="button"
           onClick={() => {
             if (dragged.current) return
-            if (open === 'none') onEdit()
+            if (open === 'none') onEdit(todo)
             else close()
           }}
           className="min-w-0 flex-1 text-left active:opacity-70"
@@ -804,5 +551,335 @@ function TodoRow({
         <Avatar name={partnerName(couple, todo.addedBy)} color={PARTNER_COLORS[todo.addedBy]} size={16} />
       </motion.div>
     </motion.div>
+  )
+})
+
+/**
+ * The edit sheet, with its own field state.
+ *
+ * Deliberately a separate component: while these lived on the screen, every keystroke re-rendered
+ * the whole Wishlist tree (composer, category chips, every group and row), and each row is a
+ * framer-motion `layout` node that has to be re-measured. Typing here now only re-renders this form.
+ */
+function TodoEditSheet({
+  todo,
+  onClose,
+  onTodoChange,
+  onMakeRoutine,
+  onPinPlace,
+}: {
+  todo: Todo | null
+  onClose: () => void
+  onTodoChange: (t: Todo) => void
+  onMakeRoutine: () => void
+  onPinPlace: (t: Todo) => void
+}) {
+  const t = useT()
+  return (
+    <BottomSheet open={!!todo} onClose={onClose} title={t('Edit to-do')}>
+      {/* keyed by id: opening a different to-do mounts a fresh form, so no seeding effect is needed */}
+      {todo && (
+        <TodoEditForm
+          key={todo.id}
+          todo={todo}
+          onClose={onClose}
+          onTodoChange={onTodoChange}
+          onMakeRoutine={onMakeRoutine}
+          onPinPlace={onPinPlace}
+        />
+      )}
+    </BottomSheet>
+  )
+}
+
+function TodoEditForm({
+  todo,
+  onClose,
+  onTodoChange,
+  onMakeRoutine,
+  onPinPlace,
+}: {
+  todo: Todo
+  onClose: () => void
+  onTodoChange: (t: Todo) => void
+  onMakeRoutine: () => void
+  onPinPlace: (t: Todo) => void
+}) {
+  const t = useT()
+  const toast = useToast()
+  const [title, setTitle] = useState(todo.title)
+  const [note, setNote] = useState(todo.note ?? '')
+  const [due, setDue] = useState(() => toLocalInput(todo.dueAt))
+
+  const edits = () => ({
+    title: title.trim(),
+    note: note.trim() || undefined,
+    dueAt: due ? new Date(due).getTime() : undefined,
+  })
+
+  async function save() {
+    const next = edits()
+    if (!next.title) return
+    await updateTodo(todo.id, next)
+    haptic(8)
+    toast(t('Saved'))
+    onClose()
+  }
+
+  /** Export this to-do to the phone's own calendar app (a routine goes as one RRULE event). */
+  function addToPhoneCalendar() {
+    if (!downloadTodoIcs(todo)) return
+    haptic(6)
+    toast(t('Calendar file saved'), '🗓️')
+  }
+
+  // Hand over to the place-search sheet, persisting any in-progress edits first so they aren't
+  // lost when the sheets swap.
+  async function pinPlace() {
+    const next = edits()
+    if (next.title) await updateTodo(todo.id, next)
+    onPinPlace(todo)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Task')}</label>
+        <input
+          className="field"
+          placeholder={t('What needs doing?')}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Note (optional)')}</label>
+        <textarea
+          rows={3}
+          className="w-full resize-none rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40"
+          placeholder={t('A little more detail…')}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Reminder (optional)')}</label>
+        <div className="flex items-center gap-2">
+          <input type="datetime-local" className="field" value={due} onChange={(e) => setDue(e.target.value)} />
+          {due && (
+            <button
+              type="button"
+              onClick={() => setDue('')}
+              aria-label={t('Clear reminder')}
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cream-deep text-ink-soft transition active:scale-90"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <button type="button" className="btn-soft w-full" onClick={onMakeRoutine}>
+        <Repeat size={16} /> {t('Make it a routine')}
+      </button>
+
+      {todo.dueAt && (
+        <button type="button" className="btn-soft w-full" onClick={addToPhoneCalendar}>
+          <CalendarPlus size={16} /> {t('Add to phone calendar')}
+        </button>
+      )}
+      <div>
+        <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Place (optional)')}</label>
+        {todo.place ? (
+          <div className="flex items-center gap-2 rounded-2xl bg-coral/10 px-3 py-2.5 ring-1 ring-coral/20">
+            <MapPin size={16} className="shrink-0 text-coral" />
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{todo.place.name}</span>
+            <button type="button" onClick={pinPlace} className="text-xs font-bold text-coral-deep active:opacity-70">
+              {t('Change')}
+            </button>
+            <button
+              type="button"
+              aria-label={t('Remove from map')}
+              onClick={async () => {
+                await clearTodoPlace(todo.id)
+                haptic(6)
+                onTodoChange({ ...todo, place: undefined })
+              }}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft/60 active:scale-90"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="btn-soft w-full" onClick={pinPlace}>
+            <MapPin size={16} /> {t('Pin a place on the map')}
+          </button>
+        )}
+      </div>
+      <button type="button" className="btn-primary w-full" disabled={!title.trim()} onClick={save}>
+        {t('Save changes')}
+      </button>
+    </div>
+  )
+}
+
+/**
+ * The quick-add card plus the "new tasks go to" category picker.
+ *
+ * Separate component for the same reason as TodoEditSheet: these fields used to live on the screen,
+ * so every character typed re-rendered the whole list underneath, and every row in it is a
+ * framer-motion `layout` node. Now a keystroke only re-renders this card.
+ */
+function TodoComposer({ groups }: { groups: TodoGroup[] }) {
+  const t = useT()
+  const toast = useToast()
+  const activePartner = useSession((s) => s.activePartner)
+  const [title, setTitle] = useState('')
+  const [note, setNote] = useState('')
+  const [showNote, setShowNote] = useState(false)
+  const [addCat, setAddCat] = useState<string | null>(null)
+  const [showDue, setShowDue] = useState(false)
+  const [due, setDue] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [newCat, setNewCat] = useState('')
+
+  const groupList = groups
+  const target = addCat ?? groupList[0]?.id ?? 'other'
+
+  async function add() {
+    const text = title.trim()
+    if (!text) return
+    await addTodo({
+      title: text,
+      note: note.trim() || undefined,
+      category: target,
+      addedBy: activePartner,
+      dueAt: showDue && due ? new Date(due).getTime() : undefined,
+    })
+    setTitle('')
+    setNote('')
+    setShowNote(false)
+    setDue('')
+    setShowDue(false)
+    haptic(8)
+    const label = groupList.find((g) => g.id === target)?.label ?? t('list')
+    toast(t('Added to {cat}', { cat: label }))
+  }
+
+  async function createCategory() {
+    const name = newCat.trim()
+    if (!name) return
+    const id = await addTodoGroup(name)
+    setAddCat(id)
+    setNewCat('')
+    setCreating(false)
+    haptic(8)
+    toast(t('Category created'), '🏷️')
+  }
+
+  return (
+    <>
+    {/* quick add */}
+    <div className="card mb-3 p-3">
+      <div className="flex items-center gap-2">
+        <input
+          className="field"
+          placeholder={t('Add a task…')}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={!title.trim()}
+          aria-label={t('Add to-do')}
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral-deep text-white transition active:scale-90 disabled:opacity-40"
+        >
+          <Plus size={24} />
+        </button>
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setShowNote((v) => !v)}
+          className={`chip ${showNote || note.trim() ? 'bg-coral/15 text-coral-deep' : 'bg-cream-deep text-ink-soft'}`}
+        >
+          <AlignLeft size={14} /> {note.trim() ? t('Note added') : t('Add a note')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowDue((v) => !v)}
+          className={`chip ${showDue ? 'bg-coral/15 text-coral-deep' : 'bg-cream-deep text-ink-soft'}`}
+        >
+          <CalendarClock size={14} /> {showDue ? t('Reminder on') : t('Add a reminder')}
+        </button>
+      </div>
+      <AnimatePresence>
+        {showNote && (
+          <motion.textarea
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            rows={2}
+            placeholder={t('A little more detail… (optional)')}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="mt-2 w-full resize-none rounded-xl bg-cream-deep px-3 py-2 text-sm text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40"
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showDue && (
+          <motion.input
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            type="datetime-local"
+            value={due}
+            onChange={(e) => setDue(e.target.value)}
+            className="mt-2 w-full rounded-xl bg-cream-deep px-3 py-1.5 text-sm text-ink outline-none"
+          />
+        )}
+      </AnimatePresence>
+    </div>
+
+    {/* category selector (where new tasks go) + create */}
+    <p className="mb-1.5 px-1 text-xs font-bold uppercase tracking-wide text-ink-soft">{t('New tasks go to')}</p>
+    <div className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+      {groupList.map((g) => (
+        <Chip key={g.id} active={target === g.id} color={g.tint} onClick={() => setAddCat(g.id)}>
+          {g.emoji} {g.label}
+        </Chip>
+      ))}
+      <Chip active={creating} color="#7c8a6f" onClick={() => setCreating((v) => !v)}>
+        <Tag size={13} /> {t('New')}
+      </Chip>
+    </div>
+    <AnimatePresence>
+      {creating && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className="overflow-hidden"
+        >
+          <div className="card mb-5 flex items-center gap-2 p-3">
+            <input
+              className="field"
+              placeholder={t('New category name…')}
+              value={newCat}
+              onChange={(e) => setNewCat(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && createCategory()}
+              autoFocus
+            />
+            <button type="button" className="btn-primary shrink-0" disabled={!newCat.trim()} onClick={createCategory}>
+              {t('Create')}
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   )
 }

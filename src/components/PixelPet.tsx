@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { SPRITE_ROWS, type PetStage, spriteMeta } from '../lib/pet'
 import type { PetSpecies } from '../types'
 
@@ -6,6 +5,10 @@ import type { PetSpecies } from '../types'
  * Renders a pixel-art pet from its CC-BY sprite sheet (Daniel Eddeland / OpenGameArt).
  * Cycles the 4 walk/eat frames when `moving`/`eating`; faces `dir`; stands facing the viewer
  * (down row, frame 0) when idle. The `egg` stage draws a little pixel egg instead.
+ *
+ * The frame cycle is a CSS `steps()` animation over background-position-x, not a timer that sets
+ * React state: a walking pet used to re-render this subtree ~7 times a second for as long as it
+ * walked, which is most of the time.
  */
 export function PixelPet({
   species,
@@ -24,32 +27,28 @@ export function PixelPet({
 }) {
   const meta = spriteMeta(species)
   const animating = moving || eating
-  const [frame, setFrame] = useState(0)
-
-  useEffect(() => {
-    if (!animating) {
-      setFrame(0)
-      return
-    }
-    const id = window.setInterval(() => setFrame((f) => (f + 1) % meta.frames), eating ? 220 : 150)
-    return () => window.clearInterval(id)
-  }, [animating, eating, meta.frames])
 
   if (stage === 'egg') return <PixelEgg size={size} />
 
   // Idle → face the viewer (down). Walking → face travel direction.
   const row = !moving && !eating ? SPRITE_ROWS.down : dir === -1 ? SPRITE_ROWS.left : SPRITE_ROWS.right
+  const msPerFrame = eating ? 220 : 150
   return (
     <div
       aria-hidden
+      className={animating ? 'pet-sprite' : undefined}
       style={{
         width: size,
         height: size,
         backgroundImage: `url(${eating ? meta.eat : meta.walk})`,
         backgroundRepeat: 'no-repeat',
         backgroundSize: `${meta.frames * size}px ${4 * size}px`,
-        backgroundPosition: `${-frame * size}px ${-row * size}px`,
+        // the animation drives x while this keeps y on the right row
+        backgroundPosition: `0px ${-row * size}px`,
         imageRendering: 'pixelated',
+        // `steps(n, jump-none)` holds each of the n frames for duration/n
+        animationDuration: `${msPerFrame * meta.frames}ms`,
+        animationTimingFunction: `steps(${meta.frames}, jump-none)`,
       }}
     />
   )
