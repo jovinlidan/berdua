@@ -46,6 +46,9 @@ export function RoutineSheet({
   const [freq, setFreq] = useState<RoutineFreq>('daily')
   const [every, setEvery] = useState(1)
   const [weekdays, setWeekdays] = useState<number[]>([])
+  // True while the weekday set is only a suggestion derived from the start date. The first tap
+  // REPLACES it: otherwise picking Tuesday and Thursday on a Friday quietly gives you three days.
+  const [weekdaysAuto, setWeekdaysAuto] = useState(true)
   const [startDate, setStartDate] = useState(todayIso)
   const [time, setTime] = useState('')
   const [endMode, setEndMode] = useState<EndMode>('never')
@@ -64,6 +67,7 @@ export function RoutineSheet({
     setFreq(routine?.freq ?? 'daily')
     setEvery(routine?.interval ?? 1)
     setWeekdays(routine?.weekdays?.length ? routine.weekdays : [weekdayOf(start)])
+    setWeekdaysAuto(!routine?.weekdays?.length)
     setStartDate(start)
     setTime(routine?.time ?? '')
     setEndMode(routine?.count ? 'after' : routine?.until ? 'on' : 'never')
@@ -94,9 +98,20 @@ export function RoutineSheet({
 
   function toggleWeekday(day: number) {
     haptic(4)
+    if (weekdaysAuto) {
+      setWeekdaysAuto(false)
+      setWeekdays([day])
+      return
+    }
     setWeekdays((current) =>
       current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort((a, b) => a - b),
     )
+  }
+
+  /** Moving the start date re-suggests its weekday, but never overrides days you picked. */
+  function pickStartDate(day: string) {
+    setStartDate(day)
+    if (weekdaysAuto && day) setWeekdays([weekdayOf(day)])
   }
 
   const [unitOne, unitMany] = UNIT_LABELS[freq]
@@ -175,7 +190,7 @@ export function RoutineSheet({
         <div className="flex gap-3">
           <div className="min-w-0 flex-1">
             <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Starts')}</label>
-            <input type="date" className="field" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <input type="date" className="field" value={startDate} onChange={(e) => pickStartDate(e.target.value)} />
           </div>
           <div className="min-w-0 flex-1">
             <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Time (optional)')}</label>

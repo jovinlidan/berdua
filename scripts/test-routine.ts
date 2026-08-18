@@ -65,6 +65,14 @@ keys = occurrenceKeys(rule({ freq: 'weekly', weekdays: [1, 3] }), '2026-06-01', 
 assert.deepEqual(keys, ['2026-06-01', '2026-06-03', '2026-06-08', '2026-06-10'])
 ok('weekly: only the chosen weekdays (Mon + Wed)')
 
+// Tuesdays AND Thursdays, the everyday way of describing a two-day week
+keys = occurrenceKeys(rule({ freq: 'weekly', weekdays: [2, 4] }), '2026-06-01', '2026-06-14')
+assert.deepEqual(keys, ['2026-06-02', '2026-06-04', '2026-06-09', '2026-06-11'])
+ok('weekly on Tue + Thu lands on both days, every week')
+
+assert.equal(toRRule(rule({ freq: 'weekly', weekdays: [2, 4] })), 'FREQ=WEEKLY;BYDAY=TU,TH')
+ok('a two-day week exports as one RRULE with both days')
+
 keys = occurrenceKeys(rule({ freq: 'weekly', interval: 2, weekdays: [1] }), '2026-06-01', '2026-07-01')
 assert.deepEqual(keys, ['2026-06-01', '2026-06-15', '2026-06-29'])
 ok('weekly with interval: every other Monday')
@@ -216,8 +224,15 @@ ok('an undated one-off has nothing to export')
 // ── Labels ─────────────────────────────────────────────────────────────────────
 assert.equal(routineSummary(rule()), 'Every day')
 assert.equal(routineSummary(rule({ interval: 2 })), 'Every 2 days')
-assert.equal(routineSummary(rule({ freq: 'weekly', weekdays: [1, 3] })), 'Every Mon, Wed')
-assert.equal(routineSummary(rule({ freq: 'weekly', interval: 2, weekdays: [6] })), 'Every 2 weeks on Sat')
+assert.equal(routineSummary(rule({ freq: 'weekly', weekdays: [2] })), 'Every Tuesday')
+assert.equal(routineSummary(rule({ freq: 'weekly', weekdays: [2, 4] })), 'Every Tuesday and Thursday')
+assert.equal(routineSummary(rule({ freq: 'weekly', weekdays: [1, 3, 5] })), 'Every Mon, Wed, Fri')
+assert.equal(routineSummary(rule({ freq: 'weekly', weekdays: [0, 1, 2, 3, 4, 5, 6] })), 'Every day')
+assert.equal(routineSummary(rule({ freq: 'weekly', interval: 2, weekdays: [6] })), 'Every 2 weeks on Saturday')
+assert.equal(
+  routineSummary(rule({ freq: 'weekly', interval: 2, weekdays: [2, 4] })),
+  'Every 2 weeks on Tuesday and Thursday',
+)
 assert.equal(routineSummary(rule({ freq: 'monthly', startDate: '2026-06-14' })), 'Monthly on day 14')
 assert.equal(routineSummary(rule({ time: '07:30' })), 'Every day · 07:30')
 ok('summaries read as plain English (and go through t() in the UI)')

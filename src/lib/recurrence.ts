@@ -27,6 +27,16 @@ export const ROUTINE_FREQ_LABELS: Record<RoutineFreq, string> = {
 }
 /** 0=Sun to 6=Sat. These English abbreviations double as the i18n keys. */
 export const WEEKDAY_KEYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+/** Full names, for summaries of one or two days ("Every Tuesday and Thursday"). */
+export const WEEKDAY_FULL_KEYS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const
 const ICS_WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
 
 const SUNDAY_EPOCH = '1970-01-04' // 1 Jan 1970 was a Thursday; the 4th is the first Sunday
@@ -343,12 +353,29 @@ export function routineSummary(routine: Routine, t: Translate = interpolate): st
     case 'daily':
       base = r.interval === 1 ? t('Every day') : t('Every {n} days', { n: r.interval })
       break
-    case 'weekly':
+    case 'weekly': {
+      const picked = routineWeekdays(r)
+      // Every weekday selected is just "every day"; one or two read better spelled out; three or
+      // more would run too long, so those fall back to the short forms.
+      if (picked.length === 7) {
+        base = r.interval === 1 ? t('Every day') : t('Every {n} weeks', { n: r.interval })
+        break
+      }
+      const named =
+        picked.length === 1
+          ? t(WEEKDAY_FULL_KEYS[picked[0]])
+          : picked.length === 2
+            ? t('{a} and {b}', {
+                a: t(WEEKDAY_FULL_KEYS[picked[0]]),
+                b: t(WEEKDAY_FULL_KEYS[picked[1]]),
+              })
+            : days()
       base =
         r.interval === 1
-          ? t('Every {days}', { days: days() })
-          : t('Every {n} weeks on {days}', { n: r.interval, days: days() })
+          ? t('Every {days}', { days: named })
+          : t('Every {n} weeks on {days}', { n: r.interval, days: named })
       break
+    }
     case 'monthly': {
       const day = parseKey(r.startDate)?.d ?? 1
       base =
