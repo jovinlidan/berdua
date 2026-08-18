@@ -284,3 +284,21 @@ whole application. A lazy boundary is not an error boundary.
 online (which is what actually fixes a post-deploy hash change) guarded by a sessionStorage flag so a
 genuine 404 cannot loop, and render a contained per-screen fallback otherwise. Verify by deleting a
 chunk from a build, and verify the before-state too, so the claim is measured rather than assumed.
+
+## 2026-08-18: A mouse-driven gesture test says nothing about a touch gesture
+**Context:** Dragging the roaming pet opened its care sheet on every drop, on a real phone. There was
+already a test asserting exactly the opposite, `dragDidNotOpenSheet`, and it had been passing for
+months. It drags with `page.mouse`. On a mouse, framer-motion suppresses the `onTap` that follows a
+drag by itself; with `pointerType: 'touch'` it does not, so `onTap` fires on the pointer-up that ENDS
+the drag. Reproducing needed dispatched touch pointer events, and then every drag distance from 8px
+to 100px opened the sheet while the pet still moved the full distance.
+
+**Lesson:** For a phone-first app, a mouse-driven gesture assertion can be worse than no assertion:
+it produces standing evidence that a broken interaction works. Mouse and touch take different paths
+through a gesture library, and the touch path is the only one users take.
+
+**How to apply:** Test gestures with `hasTouch: true` and dispatched `PointerEvent`s carrying
+`pointerType: 'touch'`. Where `drag` and a tap handler share an element, guard the tap with a ref set
+on drag start and cleared shortly after drag end (TodoRow already did this; RoamingPet did not).
+Always confirm a new regression test FAILS against the unfixed code, which is how the mouse case here
+was exposed as passing either way.
