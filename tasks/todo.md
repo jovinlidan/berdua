@@ -17,8 +17,9 @@ condensed after the main product phases shipped; durable lessons live in `tasks/
 - [x] Two-device pairing by private code with fixed member slots and reinstall-by-name recovery
 - [x] Dexie/IndexedDB repository with Upstash Redis sync, LWW merging, and tombstones
 - [x] Wishlist with custom groups, notes, reminders, swipe actions, search, and map locations
-- [x] Routines: daily/weekly/monthly repeat rules, per-occurrence check-offs, streaks, calendar
-      expansion, `.ics` RRULE export, and one push reminder per occurrence
+- [x] Routines on their own screen and tab, apart from the Wishlist: daily/weekly/monthly repeat
+      rules, per-occurrence check-offs, streaks, calendar expansion, `.ics` RRULE export, and one
+      push reminder per occurrence
 - [x] Calendar, bucket list, daily mood check-in, time capsules, and Thinking-of-you history
 - [x] Food map with MapLibre, OpenFreeMap tiles, Photon search, navigation links, and offline tile caching
 - [x] Shared pixel pets: up to three pets, care actions, growth, roaming, dragging, and habitat
@@ -58,6 +59,8 @@ Date Ideas and Memories were intentionally removed. Their old implementation not
 - Routine ticks (`Todo.routineLog`) merge per occurrence day, never whole-record last-write-wins.
 - A routine owns its own schedule; a routine record must not also carry `dueAt` (it would notify twice).
 - Routine occurrences are always derived within a bounded window, never materialised as one row per day.
+- Routines and wishlist items share the `todos` table but never share a screen: read them through
+  `useRoutines` / `useWishlist`, never `useTodos`, so neither list can leak into the other.
 - Local tombstones must shadow stale server records so deleted items do not reappear.
 - Secret entries and secret photos must never be added to `SyncDoc`.
 - Photos are device-local unless a future blob-sync design explicitly changes that.

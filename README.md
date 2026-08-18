@@ -6,7 +6,7 @@ couple's shared data between two phones through a private pairing code.
 ## What is included
 
 - Shared Wishlist with categories, reminders, swipe actions, and optional map locations
-- Repeatable routines: daily, weekly, or monthly rules with per-day check-offs, streaks, and reminders
+- Routines on their own screen: daily, weekly, or monthly rules with per-day check-offs and streaks
 - Calendar for dated Wishlist items, routine occurrences, capsules, and anniversaries
 - One-tap export of a dated item or a whole routine to each phone's own calendar app (.ics)
 - Bucket list, daily mood check-ins, time capsules, and Thinking-of-you history
@@ -122,7 +122,7 @@ scripts/         Logic and Playwright verification scripts
 src/components/  Shared UI and interaction components
 src/db/          Dexie database, hooks, and repository operations
 src/lib/         Dates, maps, notifications, pets, themes, and utilities
-src/screens/     Route-level screens
+src/screens/     Route-level screens (Wishlist is for one-off tasks; Routines for repeating ones)
 src/store/       Per-device Zustand session state
 src/sync/        Client sync engine and status tracking
 src/sw.ts        Offline cache, push, and notification service worker

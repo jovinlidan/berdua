@@ -18,6 +18,7 @@ const Capsule = lazy(() => import('./screens/Capsule'))
 const DailyCheckIn = lazy(() => import('./screens/DailyCheckIn'))
 const Map = lazy(() => import('./screens/Map'))
 const PetHabitat = lazy(() => import('./screens/PetHabitat'))
+const Routines = lazy(() => import('./screens/Routines'))
 const Secrets = lazy(() => import('./screens/Secrets'))
 const Settings = lazy(() => import('./screens/Settings'))
 const Story = lazy(() => import('./screens/Story'))
@@ -107,6 +108,7 @@ function AppRoutes() {
           <Route path="/map" element={<Map />} />
           <Route path="/pet" element={<PetHabitat />} />
           <Route path="/todos" element={<Todos />} />
+          <Route path="/routines" element={<Routines />} />
           <Route path="/capsule" element={<Capsule />} />
           <Route path="/checkin" element={<DailyCheckIn />} />
           <Route path="/secrets" element={<Secrets />} />

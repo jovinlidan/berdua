@@ -1,5 +1,5 @@
 import { AnimatePresence, type PanInfo, animate, motion, useMotionValue } from 'framer-motion'
-import { AlignLeft, ArrowDown, ArrowUp, CalendarClock, CalendarPlus, Check, ChevronDown, Flame, Lock, MapPin, Navigation, Pencil, Plus, Repeat, Search, Tag, Trash2, X } from 'lucide-react'
+import { AlignLeft, ArrowDown, ArrowUp, CalendarClock, CalendarPlus, Check, ChevronDown, Lock, MapPin, Navigation, Pencil, Plus, Repeat, Search, Tag, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
@@ -11,23 +11,16 @@ import { PageHeader } from '../components/PageHeader'
 import { PlaceSearchSheet } from '../components/PlaceSearchSheet'
 import { RoutineSheet } from '../components/RoutineSheet'
 import { useToast } from '../components/Toast'
-import { useCouple, useTodoGroups, useTodos } from '../db/hooks'
-import { addTodo, addTodoGroup, clearTodoPlace, clearTodoRoutine, deleteTodo, deleteTodoGroup, moveTodoGroup, setTodoRoutine, toggleTodo, updateTodo, updateTodoGroup } from '../db/repo'
-import { todayIso, whenLabel } from '../lib/dates'
+import { useCouple, useTodoGroups, useWishlist } from '../db/hooks'
+import { addTodo, addTodoGroup, clearTodoPlace, deleteTodo, deleteTodoGroup, moveTodoGroup, setTodoRoutine, toggleTodo, updateTodo, updateTodoGroup } from '../db/repo'
+import { whenLabel } from '../lib/dates'
 import { haptic } from '../lib/haptics'
 import { useT } from '../lib/i18n'
 import { openNavigation } from '../lib/navlinks'
 import { PARTNER_COLORS, partnerName } from '../lib/partners'
-import {
-  ROUTINE_FREQ_LABELS,
-  isTodoDoneNow,
-  routineProgress,
-  routineStreak,
-  routineSummary,
-} from '../lib/recurrence'
 import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
-import type { Couple, Routine, Todo, TodoGroup } from '../types'
+import type { Couple, Todo, TodoGroup } from '../types'
 
 
 /** epoch ms → a value the <input type="datetime-local"> understands (local time, no seconds). */
@@ -38,7 +31,7 @@ function toLocalInput(ms?: number): string {
 }
 
 export default function Todos() {
-  const todos = useTodos()
+  const todos = useWishlist()
   const groups = useTodoGroups()
   const couple = useCouple()
   const { activePartner, collapsedTodoGroups, toggleTodoGroupCollapsed } = useSession()
@@ -63,18 +56,11 @@ export default function Todos() {
   const [pendingDelete, setPendingDelete] = useState<Todo | null>(null)
   // attaching/changing the place on a wishlist item (opens the shared place-search sheet)
   const [placeTodo, setPlaceTodo] = useState<Todo | null>(null)
-  // the repeat rule being composed for a brand-new task (before it exists in the db)
-  const [newRoutine, setNewRoutine] = useState<Routine | null>(null)
-  // which sheet the routine editor is serving: the quick-add draft, or the to-do being edited
-  const [routineFor, setRoutineFor] = useState<'new' | 'edit' | null>(null)
+  // open when turning this to-do into a routine (which moves it to the Routines screen)
+  const [makeRoutine, setMakeRoutine] = useState(false)
 
-  // A routine is never "done" as a whole, so progress reads its CURRENT occurrence instead. A day
-  // with every routine ticked then still counts as finished (and still earns the confetti).
-  const todayKey = todayIso()
   const allTodos = todos ?? []
-  const donePct = allTodos.length
-    ? Math.round((allTodos.filter((t) => isTodoDoneNow(t, todayKey)).length / allTodos.length) * 100)
-    : 0
+  const donePct = allTodos.length ? Math.round((allTodos.filter((t) => t.done).length / allTodos.length) * 100) : 0
   const celebrated = useRef(false)
   useEffect(() => {
     if (allTodos.length > 0 && donePct === 100 && !celebrated.current) {
@@ -88,14 +74,13 @@ export default function Todos() {
 
   const groupList = groups ?? []
   const list = todos ?? []
-  const done = list.filter((t) => isTodoDoneNow(t, todayKey))
+  const done = list.filter((t) => t.done)
   const total = list.length
   const target = addCat ?? groupList[0]?.id ?? 'other'
   const groupIds = new Set(groupList.map((g) => g.id))
   // Completed tasks stay inside their own category (just sorted to the bottom, struck through) —
   // they are NOT moved to a separate "Done" section.
-  const sortDoneLast = (arr: Todo[]) =>
-    [...arr].sort((a, b) => Number(isTodoDoneNow(a, todayKey)) - Number(isTodoDoneNow(b, todayKey)))
+  const sortDoneLast = (arr: Todo[]) => [...arr].sort((a, b) => Number(a.done) - Number(b.done))
   const ungrouped = sortDoneLast(list.filter((t) => !groupIds.has(t.category)))
 
   async function add() {
@@ -107,17 +92,15 @@ export default function Todos() {
       category: target,
       addedBy: activePartner,
       dueAt: showDue && due ? new Date(due).getTime() : undefined,
-      routine: newRoutine ?? undefined,
     })
     setTitle('')
     setNote('')
     setShowNote(false)
     setDue('')
     setShowDue(false)
-    setNewRoutine(null)
     haptic(8)
     const label = groupList.find((g) => g.id === target)?.label ?? t('list')
-    toast(newRoutine ? t('Routine added to {cat}', { cat: label }) : t('Added to {cat}', { cat: label }))
+    toast(t('Added to {cat}', { cat: label }))
   }
 
   /** Export a wishlist item to the phone's own calendar app (a routine goes as one RRULE event). */
@@ -183,12 +166,20 @@ export default function Todos() {
         subtitle={total ? t('{n} of {total} done', { n: done.length, total }) : t('add your first task below')}
       />
 
-      <Link
-        to="/secrets"
-        className="mb-4 ml-auto flex w-fit items-center gap-1.5 rounded-full bg-cream-deep px-3.5 py-2 text-sm font-bold text-ink-soft transition active:scale-95"
-      >
-        <Lock size={14} /> {t('Private list')}
-      </Link>
+      <div className="mb-4 flex justify-end gap-2">
+        <Link
+          to="/routines"
+          className="flex items-center gap-1.5 rounded-full bg-cream-deep px-3.5 py-2 text-sm font-bold text-ink-soft transition active:scale-95"
+        >
+          <Repeat size={14} /> {t('Our routines')}
+        </Link>
+        <Link
+          to="/secrets"
+          className="flex items-center gap-1.5 rounded-full bg-cream-deep px-3.5 py-2 text-sm font-bold text-ink-soft transition active:scale-95"
+        >
+          <Lock size={14} /> {t('Private list')}
+        </Link>
+      </div>
 
       {/* quick add */}
       <div className="card mb-3 p-3">
@@ -220,20 +211,10 @@ export default function Todos() {
           </button>
           <button
             type="button"
-            onClick={() => {
-              setShowDue((v) => !v)
-              setNewRoutine(null) // a one-off reminder and a repeat rule are mutually exclusive
-            }}
+            onClick={() => setShowDue((v) => !v)}
             className={`chip ${showDue ? 'bg-coral/15 text-coral-deep' : 'bg-cream-deep text-ink-soft'}`}
           >
             <CalendarClock size={14} /> {showDue ? t('Reminder on') : t('Add a reminder')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setRoutineFor('new')}
-            className={`chip ${newRoutine ? 'bg-coral/15 text-coral-deep' : 'bg-cream-deep text-ink-soft'}`}
-          >
-            <Repeat size={14} /> {newRoutine ? t(ROUTINE_FREQ_LABELS[newRoutine.freq]) : t('Repeat it')}
           </button>
         </div>
         <AnimatePresence>
@@ -316,7 +297,6 @@ export default function Todos() {
                 group={g}
                 todos={groupTodos}
                 couple={couple}
-                todayKey={todayKey}
                 collapsed={collapsedTodoGroups.includes(g.id)}
                 onToggle={() => toggleTodoGroupCollapsed(g.id)}
                 onEditTodo={openEdit}
@@ -334,7 +314,6 @@ export default function Todos() {
               group={{ id: '_ungrouped', label: t('Uncategorised'), emoji: '📦', tint: '#9CA77F', order: 999, createdAt: 0, updatedAt: 0 }}
               todos={ungrouped}
               couple={couple}
-              todayKey={todayKey}
               collapsed={collapsedTodoGroups.includes('_ungrouped')}
               onToggle={() => toggleTodoGroupCollapsed('_ungrouped')}
               onEditTodo={openEdit}
@@ -437,9 +416,7 @@ export default function Todos() {
                 onChange={(e) => setEtNote(e.target.value)}
               />
             </div>
-            {/* A routine carries its own schedule, so it replaces the one-off reminder field. */}
-            {!editTodo.routine && (
-              <div>
+            <div>
                 <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Reminder (optional)')}</label>
                 <div className="flex items-center gap-2">
                   <input
@@ -459,36 +436,13 @@ export default function Todos() {
                     </button>
                   )}
                 </div>
-              </div>
-            )}
-
-            <div>
-              <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Repeats')}</label>
-              {editTodo.routine ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 rounded-2xl bg-coral/10 px-3 py-2.5 ring-1 ring-coral/20">
-                    <Repeat size={16} className="shrink-0 text-coral" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-                      {routineSummary(editTodo.routine, t)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setRoutineFor('edit')}
-                      className="text-xs font-bold text-coral-deep active:opacity-70"
-                    >
-                      {t('Change')}
-                    </button>
-                  </div>
-                  <RoutineProgressLine todo={editTodo} todayKey={todayKey} />
-                </div>
-              ) : (
-                <button type="button" className="btn-soft w-full" onClick={() => setRoutineFor('edit')}>
-                  <Repeat size={16} /> {t('Make it a routine')}
-                </button>
-              )}
             </div>
 
-            {(editTodo.routine || editTodo.dueAt) && (
+            <button type="button" className="btn-soft w-full" onClick={() => setMakeRoutine(true)}>
+              <Repeat size={16} /> {t('Make it a routine')}
+            </button>
+
+            {editTodo.dueAt && (
               <button type="button" className="btn-soft w-full" onClick={() => addToPhoneCalendar(editTodo)}>
                 <CalendarPlus size={16} /> {t('Add to phone calendar')}
               </button>
@@ -531,39 +485,17 @@ export default function Todos() {
       {/* attach / change a wishlist item's place (shared with the Map screen) */}
       <PlaceSearchSheet open={!!placeTodo} onClose={() => setPlaceTodo(null)} todo={placeTodo ?? undefined} />
 
-      {/* repeat editor, shared by the quick-add draft and the to-do being edited */}
+      {/* turning a task into a routine hands it over to the Routines screen */}
       <RoutineSheet
-        open={routineFor !== null}
-        onClose={() => setRoutineFor(null)}
-        value={routineFor === 'edit' ? editTodo?.routine ?? null : newRoutine}
+        open={makeRoutine}
+        onClose={() => setMakeRoutine(false)}
         onSave={async (routine) => {
-          if (routineFor === 'edit' && editTodo) {
-            await setTodoRoutine(editTodo.id, routine)
-            setEditTodo({ ...editTodo, routine, dueAt: undefined })
-            setEtDue('')
-            toast(t('Routine saved'), '🔁')
-          } else {
-            setNewRoutine(routine)
-            setShowDue(false) // the routine's own time replaces a one-off reminder
-            setDue('')
-          }
-          setRoutineFor(null)
+          if (!editTodo) return
+          await setTodoRoutine(editTodo.id, routine)
+          setMakeRoutine(false)
+          setEditTodo(null)
+          toast(t('Moved to Routines'), '🔁')
         }}
-        onRemove={
-          routineFor === 'edit' && editTodo?.routine
-            ? async () => {
-                await clearTodoRoutine(editTodo.id)
-                setEditTodo({ ...editTodo, routine: undefined })
-                setRoutineFor(null)
-                toast(t('Stopped repeating'))
-              }
-            : routineFor === 'new' && newRoutine
-              ? () => {
-                  setNewRoutine(null)
-                  setRoutineFor(null)
-                }
-              : undefined
-        }
       />
 
       {/* delete confirmation */}
@@ -598,24 +530,10 @@ export default function Todos() {
   )
 }
 
-/** Progress + streak read-back for a routine (used in the edit sheet). */
-function RoutineProgressLine({ todo, todayKey }: { todo: Todo; todayKey: string }) {
-  const t = useT()
-  const { done, total } = routineProgress(todo)
-  const streak = routineStreak(todo, todayKey)
-  return (
-    <p className="px-1 text-xs text-ink-soft">
-      {total === null ? t('{done} done', { done }) : t('{done} of {total} done', { done, total })}
-      {streak >= 2 && ` · ${t('{n} in a row', { n: streak })}`}
-    </p>
-  )
-}
-
 function GroupSection({
   group,
   todos,
   couple,
-  todayKey,
   collapsed,
   onToggle,
   onEdit,
@@ -625,7 +543,6 @@ function GroupSection({
   group: TodoGroup
   todos: Todo[]
   couple: Couple
-  todayKey: string
   collapsed: boolean
   onToggle: () => void
   onEdit?: () => void
@@ -633,7 +550,7 @@ function GroupSection({
   onRequestDelete: (t: Todo) => void
 }) {
   const tr = useT()
-  const openCount = todos.filter((t) => !isTodoDoneNow(t, todayKey)).length
+  const openCount = todos.filter((t) => !t.done).length
   return (
     <motion.div layout transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="mb-3">
       <div className="flex items-center gap-1">
@@ -686,8 +603,7 @@ function GroupSection({
                     todo={t}
                     tint={group.tint}
                     couple={couple}
-                    todayKey={todayKey}
-                    onEdit={() => onEditTodo(t)}
+                        onEdit={() => onEditTodo(t)}
                     onRequestDelete={() => onRequestDelete(t)}
                   />
                 ))}
@@ -706,14 +622,12 @@ function TodoRow({
   todo,
   tint,
   couple,
-  todayKey,
   onEdit,
   onRequestDelete,
 }: {
   todo: Todo
   tint: string
   couple: Couple
-  todayKey: string
   onEdit: () => void
   onRequestDelete: () => void
 }) {
@@ -723,10 +637,7 @@ function TodoRow({
   const [open, setOpen] = useState<'none' | 'done' | 'delete'>('none')
   // True briefly around a drag so the click that fires on release doesn't toggle/edit the row.
   const dragged = useRef(false)
-  // For a routine, "done" means the occurrence it's standing on today; the activity itself lives on.
-  const doneNow = isTodoDoneNow(todo, todayKey)
-  const streak = todo.routine ? routineStreak(todo, todayKey) : 0
-  const progress = todo.routine ? routineProgress(todo) : null
+  const doneNow = todo.done
   const check = () => {
     haptic(doneNow ? 4 : [8, 20])
     void toggleTodo(todo.id, activePartner)
@@ -849,22 +760,7 @@ function TodoRow({
               <MapPin size={11} /> {todo.place.name}
             </span>
           )}
-          {todo.routine && (
-            <span className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-ink-soft">
-              <Repeat size={11} className="shrink-0" />
-              <span className="truncate">{routineSummary(todo.routine, t)}</span>
-              {/* One stat, never two: a live streak if there is one, otherwise how far a finite
-                  routine has got. Colour is reserved for status, so the rule itself stays quiet. */}
-              {streak >= 2 ? (
-                <span className="flex shrink-0 items-center gap-0.5 text-coral-deep">
-                  · <Flame size={11} /> {streak}
-                </span>
-              ) : progress?.total ? (
-                <span className="shrink-0">· {progress.done}/{progress.total}</span>
-              ) : null}
-            </span>
-          )}
-          {todo.dueAt && !todo.routine && !todo.done && (
+          {todo.dueAt && !todo.done && (
             <span className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-coral-deep">
               <CalendarClock size={11} /> {whenLabel(todo.dueAt)}
             </span>

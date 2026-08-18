@@ -175,7 +175,7 @@ export default function Home() {
       {/* Today's routines */}
       {routines.length > 0 && (
         <motion.section {...fade(0.22)} className="mt-4">
-          <Link to="/todos" className="block">
+          <Link to="/routines" className="block">
             <motion.div whileTap={{ scale: 0.99 }} className="card flex items-center gap-4 p-5">
               <span
                 className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${

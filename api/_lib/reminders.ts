@@ -74,7 +74,7 @@ export function dueReminders(doc: SyncDoc, nowMs: number): ReminderEvent[] {
         key: `routine:${todo.id}:${day}`,
         title: 'Routine time 🔁',
         body: todo.title,
-        url: '/todos',
+        url: '/routines',
       })
     }
   }

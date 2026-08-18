@@ -2,7 +2,7 @@
 // Everything it produces is a plain `Routine` rule (never a list of dates), so the same sheet is
 // used for composing a new activity and for editing an existing one.
 import { format, parseISO } from 'date-fns'
-import { Repeat, Trash2 } from 'lucide-react'
+import { Repeat } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   MAX_OCCURRENCES,
@@ -35,13 +35,11 @@ export function RoutineSheet({
   onClose,
   value,
   onSave,
-  onRemove,
 }: {
   open: boolean
   onClose: () => void
   value?: Routine | null
   onSave: (routine: Routine) => void
-  onRemove?: () => void
 }) {
   const t = useT()
   const locale = activeDateLocale()
@@ -252,18 +250,6 @@ export function RoutineSheet({
         >
           {t('Save routine')}
         </button>
-        {onRemove && (
-          <button
-            type="button"
-            className="btn-soft mx-auto flex text-coral-deep"
-            onClick={() => {
-              haptic(6)
-              onRemove()
-            }}
-          >
-            <Trash2 size={16} /> {t('Stop repeating')}
-          </button>
-        )}
       </div>
     </BottomSheet>
   )

@@ -5,6 +5,7 @@ import { todayIso } from '../lib/dates'
 import {
   addDaysKey,
   isOccurrenceDone,
+  nextOccurrenceKey,
   localTzOffset,
   occurrenceInstant,
   occurrenceKeys,
@@ -28,6 +29,26 @@ export const useBucket = () =>
 
 export const useTodos = () =>
   useLiveQuery(() => db.todos.orderBy('createdAt').reverse().toArray())
+
+/**
+ * The two halves of the todos table, kept apart because they are different kinds of thing: a
+ * wishlist item is finished once, a routine keeps coming back. They share one synced collection so
+ * per-day ticks, tombstones and history keep working, but no screen ever shows both.
+ */
+export const useWishlist = () =>
+  useLiveQuery(() => db.todos.orderBy('createdAt').reverse().toArray().then((rows) => rows.filter((r) => !r.routine)))
+
+/** Routines, soonest next occurrence first, so the list reads as "what's coming". */
+export const useRoutines = () =>
+  useLiveQuery(async () => {
+    const today = todayIso()
+    const rows = (await db.todos.toArray()).filter((r) => r.routine)
+    return rows.sort((a, b) => {
+      const an = a.routine ? (nextOccurrenceKey(a.routine, today) ?? '9999-12-31') : '9999-12-31'
+      const bn = b.routine ? (nextOccurrenceKey(b.routine, today) ?? '9999-12-31') : '9999-12-31'
+      return an === bn ? a.createdAt - b.createdAt : an < bn ? -1 : 1
+    })
+  })
 
 // To-dos pinned to a place — the dots on the Map screen. Newest first.
 export const useLocatedTodos = () =>
@@ -123,7 +144,7 @@ export const useCalendarEvents = (fromKey?: string, toKey?: string) =>
             done: isOccurrenceDone(t, day),
             allDay: !t.routine.time,
             occurrenceKey: day,
-            route: '/todos',
+            route: '/routines',
           })
         }
         continue
