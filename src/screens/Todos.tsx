@@ -1,5 +1,5 @@
 import { AnimatePresence, type PanInfo, animate, motion, useMotionValue } from 'framer-motion'
-import { AlignLeft, ArrowDown, ArrowUp, CalendarClock, Check, ChevronDown, Lock, MapPin, Navigation, Pencil, Plus, Search, Tag, Trash2, X } from 'lucide-react'
+import { AlignLeft, ArrowDown, ArrowUp, CalendarClock, CalendarPlus, Check, ChevronDown, Lock, MapPin, Navigation, Pencil, Plus, Repeat, Search, Tag, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
@@ -9,19 +9,18 @@ import { Chip } from '../components/Chip'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 import { PlaceSearchSheet } from '../components/PlaceSearchSheet'
+import { RoutineSheet } from '../components/RoutineSheet'
 import { useToast } from '../components/Toast'
-import { useCouple, useTodoGroups, useTodos } from '../db/hooks'
-import { addTodo, addTodoGroup, clearTodoPlace, deleteTodo, deleteTodoGroup, moveTodoGroup, toggleTodo, updateTodo, updateTodoGroup } from '../db/repo'
+import { useCouple, useTodoGroups, useWishlist } from '../db/hooks'
+import { addTodo, addTodoGroup, clearTodoPlace, deleteTodo, deleteTodoGroup, moveTodoGroup, setTodoRoutine, toggleTodo, updateTodo, updateTodoGroup } from '../db/repo'
 import { whenLabel } from '../lib/dates'
 import { haptic } from '../lib/haptics'
 import { useT } from '../lib/i18n'
 import { openNavigation } from '../lib/navlinks'
 import { PARTNER_COLORS, partnerName } from '../lib/partners'
+import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
 import type { Couple, Todo, TodoGroup } from '../types'
-
-const FIELD =
-  'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
 
 /** epoch ms → a value the <input type="datetime-local"> understands (local time, no seconds). */
 function toLocalInput(ms?: number): string {
@@ -31,7 +30,7 @@ function toLocalInput(ms?: number): string {
 }
 
 export default function Todos() {
-  const todos = useTodos()
+  const todos = useWishlist()
   const groups = useTodoGroups()
   const couple = useCouple()
   const { activePartner, collapsedTodoGroups, toggleTodoGroupCollapsed } = useSession()
@@ -56,8 +55,9 @@ export default function Todos() {
   const [pendingDelete, setPendingDelete] = useState<Todo | null>(null)
   // attaching/changing the place on a wishlist item (opens the shared place-search sheet)
   const [placeTodo, setPlaceTodo] = useState<Todo | null>(null)
+  // open when turning this to-do into a routine (which moves it to the Routines screen)
+  const [makeRoutine, setMakeRoutine] = useState(false)
 
-  // celebrate finishing everything (fires once when hitting 100%)
   const allTodos = todos ?? []
   const donePct = allTodos.length ? Math.round((allTodos.filter((t) => t.done).length / allTodos.length) * 100) : 0
   const celebrated = useRef(false)
@@ -100,6 +100,13 @@ export default function Todos() {
     haptic(8)
     const label = groupList.find((g) => g.id === target)?.label ?? t('list')
     toast(t('Added to {cat}', { cat: label }))
+  }
+
+  /** Export a wishlist item to the phone's own calendar app (a routine goes as one RRULE event). */
+  function addToPhoneCalendar(todo: Todo) {
+    if (!downloadTodoIcs(todo)) return
+    haptic(6)
+    toast(t('Calendar file saved'), '🗓️')
   }
 
   function openEdit(t: Todo) {
@@ -152,24 +159,32 @@ export default function Todos() {
   }
 
   return (
-    <div className="pt-[calc(0.4rem+env(safe-area-inset-top))]">
+    <div data-surface="list" className="pt-[calc(0.4rem+env(safe-area-inset-top))]">
       <PageHeader
         title={t('Wishlist, together')}
         subtitle={total ? t('{n} of {total} done', { n: done.length, total }) : t('add your first task below')}
       />
 
-      <Link
-        to="/secrets"
-        className="mb-4 ml-auto flex w-fit items-center gap-1.5 rounded-full bg-cream-deep px-3.5 py-2 text-sm font-bold text-ink-soft transition active:scale-95"
-      >
-        <Lock size={14} /> {t('Private list')}
-      </Link>
+      <div className="mb-4 flex justify-end gap-2">
+        <Link
+          to="/routines"
+          className="flex items-center gap-1.5 rounded-full bg-cream-deep px-3.5 py-2 text-sm font-bold text-ink-soft transition active:scale-95"
+        >
+          <Repeat size={14} /> {t('Our routines')}
+        </Link>
+        <Link
+          to="/secrets"
+          className="flex items-center gap-1.5 rounded-full bg-cream-deep px-3.5 py-2 text-sm font-bold text-ink-soft transition active:scale-95"
+        >
+          <Lock size={14} /> {t('Private list')}
+        </Link>
+      </div>
 
       {/* quick add */}
       <div className="card mb-3 p-3">
         <div className="flex items-center gap-2">
           <input
-            className={FIELD}
+            className="field"
             placeholder={t('Add a task…')}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -180,7 +195,7 @@ export default function Todos() {
             onClick={add}
             disabled={!title.trim()}
             aria-label={t('Add to-do')}
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral text-white transition active:scale-90 disabled:opacity-40"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral-deep text-white transition active:scale-90 disabled:opacity-40"
           >
             <Plus size={24} />
           </button>
@@ -252,7 +267,7 @@ export default function Todos() {
           >
             <div className="card mb-5 flex items-center gap-2 p-3">
               <input
-                className={FIELD}
+                className="field"
                 placeholder={t('New category name…')}
                 value={newCat}
                 onChange={(e) => setNewCat(e.target.value)}
@@ -323,8 +338,7 @@ export default function Todos() {
                 value={editLabel}
                 onChange={(e) => setEditLabel(e.target.value)}
                 placeholder={t('Category name')}
-                className={FIELD}
-                autoFocus
+                className="field"
               />
             </div>
             <div className="flex gap-3">
@@ -385,11 +399,10 @@ export default function Todos() {
             <div>
               <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Task')}</label>
               <input
-                className={FIELD}
+                className="field"
                 placeholder={t('What needs doing?')}
                 value={etTitle}
                 onChange={(e) => setEtTitle(e.target.value)}
-                autoFocus
               />
             </div>
             <div>
@@ -403,26 +416,36 @@ export default function Todos() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Reminder (optional)')}</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="datetime-local"
-                  className={FIELD}
-                  value={etDue}
-                  onChange={(e) => setEtDue(e.target.value)}
-                />
-                {etDue && (
-                  <button
-                    type="button"
-                    onClick={() => setEtDue('')}
-                    aria-label={t('Clear reminder')}
-                    className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cream-deep text-ink-soft transition active:scale-90"
-                  >
-                    <X size={18} />
-                  </button>
-                )}
-              </div>
+                <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Reminder (optional)')}</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    className="field"
+                    value={etDue}
+                    onChange={(e) => setEtDue(e.target.value)}
+                  />
+                  {etDue && (
+                    <button
+                      type="button"
+                      onClick={() => setEtDue('')}
+                      aria-label={t('Clear reminder')}
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cream-deep text-ink-soft transition active:scale-90"
+                    >
+                      <X size={18} />
+                    </button>
+                  )}
+                </div>
             </div>
+
+            <button type="button" className="btn-soft w-full" onClick={() => setMakeRoutine(true)}>
+              <Repeat size={16} /> {t('Make it a routine')}
+            </button>
+
+            {editTodo.dueAt && (
+              <button type="button" className="btn-soft w-full" onClick={() => addToPhoneCalendar(editTodo)}>
+                <CalendarPlus size={16} /> {t('Add to phone calendar')}
+              </button>
+            )}
             <div>
               <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Place (optional)')}</label>
               {editTodo.place ? (
@@ -460,6 +483,19 @@ export default function Todos() {
 
       {/* attach / change a wishlist item's place (shared with the Map screen) */}
       <PlaceSearchSheet open={!!placeTodo} onClose={() => setPlaceTodo(null)} todo={placeTodo ?? undefined} />
+
+      {/* turning a task into a routine hands it over to the Routines screen */}
+      <RoutineSheet
+        open={makeRoutine}
+        onClose={() => setMakeRoutine(false)}
+        onSave={async (routine) => {
+          if (!editTodo) return
+          await setTodoRoutine(editTodo.id, routine)
+          setMakeRoutine(false)
+          setEditTodo(null)
+          toast(t('Moved to Routines'), '🔁')
+        }}
+      />
 
       {/* delete confirmation */}
       <BottomSheet open={!!pendingDelete} onClose={() => setPendingDelete(null)} title={t('Delete this task?')}>
@@ -566,7 +602,7 @@ function GroupSection({
                     todo={t}
                     tint={group.tint}
                     couple={couple}
-                    onEdit={() => onEditTodo(t)}
+                        onEdit={() => onEditTodo(t)}
                     onRequestDelete={() => onRequestDelete(t)}
                   />
                 ))}
@@ -595,10 +631,16 @@ function TodoRow({
   onRequestDelete: () => void
 }) {
   const t = useT()
+  const activePartner = useSession((s) => s.activePartner)
   const x = useMotionValue(0)
   const [open, setOpen] = useState<'none' | 'done' | 'delete'>('none')
   // True briefly around a drag so the click that fires on release doesn't toggle/edit the row.
   const dragged = useRef(false)
+  const doneNow = todo.done
+  const check = () => {
+    haptic(doneNow ? 4 : [8, 20])
+    void toggleTodo(todo.id, activePartner)
+  }
 
   const settle = (to: number) => animate(x, to, { type: 'spring', stiffness: 500, damping: 42 })
   const close = () => {
@@ -633,17 +675,16 @@ function TodoRow({
       className="relative"
     >
       {/* Latched swipe actions behind the card — tap to act (no auto-fire). */}
-      <div className="absolute inset-0 flex items-stretch justify-between overflow-hidden rounded-xl">
+      <div className="absolute inset-0 flex items-stretch justify-between overflow-hidden rounded-[var(--radius-row)]">
         <button
           type="button"
           onClick={() => {
-            haptic(todo.done ? 4 : [8, 20])
-            void toggleTodo(todo.id)
+            check()
             close()
           }}
           className="flex w-[84px] flex-col items-center justify-center gap-0.5 bg-sage text-xs font-bold text-white"
         >
-          <Check size={18} strokeWidth={3} /> {todo.done ? t('Undo') : t('Done')}
+          <Check size={18} strokeWidth={3} /> {doneNow ? t('Undo') : t('Done')}
         </button>
         <button
           type="button"
@@ -668,9 +709,8 @@ function TodoRow({
         onDragStart={() => (dragged.current = true)}
         onDragEnd={onDragEnd}
         style={{ x, touchAction: 'pan-y' }}
-        className="card relative flex items-center gap-2.5 overflow-hidden !rounded-xl p-2.5 pl-3 shadow-[0_1px_2px_rgba(58,46,43,0.06)] ring-ink/[0.06]"
+        className="row relative flex items-center gap-2.5 overflow-hidden p-3"
       >
-        <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: tint }} />
         {/* Check: bold tinted ring + soft tint fill (clearly tappable) → solid sage + white check when done */}
         <button
           type="button"
@@ -680,19 +720,18 @@ function TodoRow({
               close() // an open row: any tap on the card just closes it
               return
             }
-            haptic(todo.done ? 4 : [8, 20])
-            void toggleTodo(todo.id)
+            check()
           }}
-          aria-label={todo.done ? t('Mark not done') : t('Mark done')}
+          aria-label={doneNow ? t('Mark not done') : t('Mark done')}
           className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-white transition active:scale-90"
           style={
-            todo.done
+            doneNow
               ? { backgroundColor: '#7C8A6F', boxShadow: 'inset 0 0 0 2px #7C8A6F' }
               : { backgroundColor: `${tint}26`, boxShadow: `inset 0 0 0 2px ${tint}` }
           }
         >
           <AnimatePresence>
-            {todo.done && (
+            {doneNow && (
               <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
                 <Check size={14} strokeWidth={3} />
               </motion.span>
@@ -709,14 +748,14 @@ function TodoRow({
           className="min-w-0 flex-1 text-left active:opacity-70"
           aria-label={t('Edit to-do')}
         >
-          <p className={`text-sm font-semibold leading-snug transition ${todo.done ? 'text-ink-soft/60 line-through' : 'text-ink'}`}>
+          <p className={`text-sm font-semibold leading-snug transition ${doneNow ? 'text-ink-soft/60 line-through' : 'text-ink'}`}>
             {todo.title}
           </p>
           {todo.note && (
-            <p className={`line-clamp-1 text-xs ${todo.done ? 'text-ink-soft/50' : 'text-ink-soft'}`}>{todo.note}</p>
+            <p className={`line-clamp-1 text-xs ${doneNow ? 'text-ink-soft/50' : 'text-ink-soft'}`}>{todo.note}</p>
           )}
           {todo.place && (
-            <span className={`mt-0.5 flex items-center gap-1 text-[11px] font-semibold ${todo.done ? 'text-ink-soft/50' : 'text-coral'}`}>
+            <span className={`mt-0.5 flex items-center gap-1 text-[11px] font-semibold ${doneNow ? 'text-ink-soft/50' : 'text-coral'}`}>
               <MapPin size={11} /> {todo.place.name}
             </span>
           )}

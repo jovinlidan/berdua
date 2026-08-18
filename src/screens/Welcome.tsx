@@ -7,9 +7,6 @@ import { notificationSupport, requestPermission, subscribeToPush } from '../lib/
 import { useSession } from '../store/useSession'
 import { joinCouple } from '../sync/sync'
 
-const FIELD =
-  'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
-
 export default function Welcome() {
   const t = useT()
   const navigate = useNavigate()
@@ -83,13 +80,13 @@ export default function Welcome() {
         <div className="card space-y-4 p-5">
           <div>
             <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Your name')}</label>
-            <input className={FIELD} placeholder={t('You')} value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="field" placeholder={t('You')} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('The day it began 💞 (optional)')}</label>
             <input
               type="date"
-              className={FIELD}
+              className="field"
               value={anniversary}
               onChange={(e) => setAnniversary(e.target.value)}
             />
@@ -97,7 +94,7 @@ export default function Welcome() {
           <div>
             <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Your couple code')}</label>
             <input
-              className={FIELD}
+              className="field"
               placeholder={t('A secret word, just for the two of you')}
               value={code}
               onChange={(e) => {

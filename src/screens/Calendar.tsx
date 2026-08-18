@@ -13,31 +13,59 @@ import {
   startOfWeek,
 } from 'date-fns'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronLeft, ChevronRight, Heart } from 'lucide-react'
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, Heart } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
-import { useCalendarEvents, useCouple, type CalendarEvent, type CalendarEventType } from '../db/hooks'
+import { useToast } from '../components/Toast'
+import { useCalendarEvents, useCouple, useTodos, type CalendarEvent, type CalendarEventType } from '../db/hooks'
+import { toggleRoutineOccurrence } from '../db/repo'
 import { formatTime } from '../lib/dates'
 import { haptic } from '../lib/haptics'
 import { activeDateLocale, useT } from '../lib/i18n'
+import { downloadTodoIcs } from '../lib/todoIcs'
+import { useSession } from '../store/useSession'
+import type { PartnerKey } from '../types'
 
-// Labels are translated at render via t(); colors/emoji stay as-is.
-const META: Record<CalendarEventType | 'anniversary', { emoji: string; color: string; label: string }> = {
-  todo: { emoji: '☑️', color: '#7C8A6F', label: 'Wishlist' },
-  capsule: { emoji: '💌', color: '#9D8EC9', label: 'Capsule' },
-  anniversary: { emoji: '❤️', color: '#E07A9B', label: 'Anniversary' },
+// Labels are translated at render via t(); colors/emoji stay as-is. A routine carries no emoji:
+// its row is interactive, so the slot holds a real check control instead (see RoutineRow).
+const META: Record<CalendarEventType | 'anniversary', { emoji?: string; color: string; label: string }> = {
+  todo: { emoji: '☑️', color: '#6E7D62', label: 'Wishlist' },
+  routine: { color: '#B4703F', label: 'Routine' },
+  capsule: { emoji: '💌', color: '#7E6BB0', label: 'Capsule' },
+  anniversary: { emoji: '❤️', color: '#C25876', label: 'Anniversary' },
 }
 const dayKey = (d: Date | number) => format(d, 'yyyy-MM-dd')
 
 export default function Calendar() {
   const t = useT()
   const couple = useCouple()
-  const events = useCalendarEvents()
+  const todos = useTodos()
+  const toast = useToast()
+  const activePartner = useSession((s) => s.activePartner)
   const navigate = useNavigate()
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()))
   const [selected, setSelected] = useState(() => new Date())
+
+  // Routines are expanded per day on read, so the query is bounded to the visible month plus a
+  // month of slack either side. The selected day is folded in as well: stepping the cursor two
+  // months away used to leave it outside the window, and its detail panel went blank.
+  const monthFrom = dayKey(addMonths(startOfWeek(startOfMonth(cursor)), -1))
+  const monthTo = dayKey(addMonths(endOfWeek(endOfMonth(cursor)), 1))
+  const selectedKey = dayKey(selected)
+  const events = useCalendarEvents(
+    selectedKey < monthFrom ? selectedKey : monthFrom,
+    selectedKey > monthTo ? selectedKey : monthTo,
+  )
+
+  /** Hand one wishlist item to the phone's own calendar app (a routine goes as one RRULE event). */
+  function exportToPhone(sourceId: string) {
+    const todo = todos?.find((row) => row.id === sourceId)
+    if (!todo || !downloadTodoIcs(todo)) return
+    haptic(6)
+    toast(t('Calendar file saved'), '🗓️')
+  }
 
   // Weekday initials + month names follow the chosen language (re-renders via useT on lang change).
   const locale = activeDateLocale()
@@ -146,12 +174,16 @@ export default function Calendar() {
                   key={day.toISOString()}
                   type="button"
                   onClick={() => pick(day)}
+                  // The bare number reads as "5" to a screen reader; name the whole day instead.
+                  aria-label={format(day, 'EEEE, MMMM d', { locale })}
+                  aria-current={today ? 'date' : undefined}
+                  data-day={dayKey(day)}
                   className="flex flex-col items-center py-1"
                 >
                   <span
                     className={`grid h-9 w-9 place-items-center rounded-full text-sm font-semibold transition ${
                       selectedDay
-                        ? 'bg-coral text-white'
+                        ? 'bg-coral-deep text-white'
                         : today
                           ? 'text-coral ring-2 ring-coral/40'
                           : inMonth
@@ -181,7 +213,7 @@ export default function Calendar() {
         </AnimatePresence>
       </div>
 
-      {/* selected day detail */}
+      {/* selected day detail (see RoutineRow below for the tick-off row) */}
       <div className="mt-5">
         <h2 className="mb-2 px-1 font-serif text-lg font-semibold text-ink">{format(selected, 'EEEE, MMMM d', { locale })}</h2>
         <AnimatePresence mode="wait">
@@ -194,7 +226,7 @@ export default function Calendar() {
             className="space-y-2.5"
           >
             {selectedAnniv !== null && (
-              <div className="card flex items-center gap-3 p-3.5" style={{ boxShadow: `inset 4px 0 0 ${META.anniversary.color}` }}>
+              <div className="card flex items-center gap-3 p-3.5">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-xl" style={{ backgroundColor: `${META.anniversary.color}22` }}>
                   {META.anniversary.emoji}
                 </span>
@@ -209,40 +241,116 @@ export default function Calendar() {
               </div>
             )}
 
-            {selectedEvents.map((e) => (
-              <button
-                key={`${e.type}-${e.id}`}
-                type="button"
-                onClick={() => navigate(e.route)}
-                className="card flex w-full items-center gap-3 p-3.5 text-left transition active:scale-[0.99]"
-                style={{ boxShadow: `inset 4px 0 0 ${META[e.type].color}` }}
-              >
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-xl" style={{ backgroundColor: `${META[e.type].color}22` }}>
-                  {META[e.type].emoji}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className={`font-semibold ${e.done ? 'text-ink-soft/60 line-through' : 'text-ink'}`}>{e.title}</p>
-                  <p className="flex items-center gap-1.5 text-sm text-ink-soft">
-                    <span style={{ color: META[e.type].color }} className="font-bold">
-                      {t(META[e.type].label)}
-                    </span>
-                    <span>· {formatTime(e.at)}</span>
-                    {e.subtitle && <span className="truncate">· {e.subtitle}</span>}
-                  </p>
-                </div>
-              </button>
-            ))}
+            {selectedEvents.map((e) =>
+              e.type === 'routine' ? (
+                <RoutineRow
+                  key={e.id}
+                  event={e}
+                  by={activePartner}
+                  onOpen={() => navigate(e.route)}
+                  onExport={() => exportToPhone(e.sourceId)}
+                />
+              ) : (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => navigate(e.route)}
+                  className="card flex w-full items-center gap-3 p-3.5 text-left transition active:scale-[0.99]"
+                >
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-xl" style={{ backgroundColor: `${META[e.type].color}22` }}>
+                    {META[e.type].emoji}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className={`font-semibold ${e.done ? 'text-ink-soft/60 line-through' : 'text-ink'}`}>{e.title}</p>
+                    <p className="flex items-center gap-1.5 text-sm text-ink-soft">
+                      <span style={{ color: META[e.type].color }} className="font-bold">
+                        {t(META[e.type].label)}
+                      </span>
+                      <span>· {formatTime(e.at)}</span>
+                      {e.subtitle && <span className="truncate">· {e.subtitle}</span>}
+                    </p>
+                  </div>
+                </button>
+              ),
+            )}
 
             {selectedEvents.length === 0 && selectedAnniv === null && (
               <EmptyState
                 emoji="🗓️"
                 title={t('Nothing on this day')}
-                subtitle={t('Plan a date or add a to-do with a reminder and it shows up here.')}
+                subtitle={t('Add a reminder or a repeating routine to a wishlist item and it shows up here.')}
               />
             )}
           </motion.div>
         </AnimatePresence>
       </div>
+    </div>
+  )
+}
+
+/**
+ * One occurrence of a routine on the selected day. Unlike the other rows it is not just a link:
+ * the couple can tick THAT day off right here (each day carries its own state), and hand the whole
+ * repeating series to the phone's calendar app.
+ */
+function RoutineRow({
+  event,
+  by,
+  onOpen,
+  onExport,
+}: {
+  event: CalendarEvent
+  by: PartnerKey
+  onOpen: () => void
+  onExport: () => void
+}) {
+  const t = useT()
+  const occurrenceKey = event.occurrenceKey
+  return (
+    <div
+      className="card flex w-full items-center gap-3 p-3.5"
+    >
+      {/* The same check the wishlist row uses, so "tap to tick this day off" needs no explaining. */}
+      <button
+        type="button"
+        disabled={!occurrenceKey}
+        onClick={() => {
+          if (!occurrenceKey) return
+          haptic(event.done ? 4 : [8, 20])
+          void toggleRoutineOccurrence(event.sourceId, occurrenceKey, by)
+        }}
+        aria-label={event.done ? t('Mark not done') : t('Mark done')}
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl transition active:scale-90"
+      >
+        <span
+          className="grid h-6 w-6 place-items-center rounded-full text-white"
+          style={
+            event.done
+              ? { backgroundColor: '#7C8A6F', boxShadow: 'inset 0 0 0 2px #7C8A6F' }
+              : { backgroundColor: `${META.routine.color}26`, boxShadow: `inset 0 0 0 2px ${META.routine.color}` }
+          }
+        >
+          {event.done && <Check size={14} strokeWidth={3} />}
+        </span>
+      </button>
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left active:opacity-70">
+        <p className={`font-semibold ${event.done ? 'text-ink-soft/60 line-through' : 'text-ink'}`}>{event.title}</p>
+        <p className="flex items-center gap-1.5 text-sm text-ink-soft">
+          <span style={{ color: META.routine.color }} className="font-bold">
+            {t(META.routine.label)}
+          </span>
+          {!event.allDay && <span>· {formatTime(event.at)}</span>}
+          {event.subtitle && <span className="truncate">· {event.subtitle}</span>}
+        </p>
+      </button>
+      <button
+        type="button"
+        onClick={onExport}
+        aria-label={t('Add to phone calendar')}
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft/60 transition active:scale-90 hover:text-coral"
+      >
+        <CalendarPlus size={16} />
+      </button>
     </div>
   )
 }

@@ -15,9 +15,6 @@ import { PARTNER_COLORS, partnerName } from '../lib/partners'
 import { useSession } from '../store/useSession'
 import type { SealedNote } from '../types'
 
-const FIELD =
-  'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
-
 function defaultUnlock(): string {
   const d = new Date(Date.now() + 30 * 86_400_000) // a month out
   return format(d, 'yyyy-MM-dd')
@@ -101,7 +98,7 @@ export default function Capsule() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t('New time capsule')}
-        className={`fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-coral text-white shadow-[0_12px_30px_-8px_rgba(232,146,124,0.9)] transition-opacity duration-200 active:scale-90 ${
+        className={`fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-coral-deep text-white shadow-[0_12px_30px_-10px_rgba(200,106,81,0.75)] transition-opacity duration-200 active:scale-90 ${
           open ? 'pointer-events-none opacity-0' : 'opacity-100'
         }`}
       >
@@ -110,9 +107,9 @@ export default function Capsule() {
 
       <BottomSheet open={open} onClose={() => setOpen(false)} title={t('Seal a note')}>
         <div className="space-y-4">
-          <input className={FIELD} placeholder={t('Title (optional)')} value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input className="field" placeholder={t('Title (optional)')} value={title} onChange={(e) => setTitle(e.target.value)} />
           <textarea
-            className={`${FIELD} font-script text-2xl leading-snug`}
+            className="field font-script text-2xl leading-snug"
             rows={4}
             placeholder={t('Dear us…')}
             value={body}
@@ -120,7 +117,7 @@ export default function Capsule() {
           />
           <div>
             <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Opens on')}</label>
-            <input type="date" className={FIELD} value={unlock} onChange={(e) => setUnlock(e.target.value)} />
+            <input type="date" className="field" value={unlock} onChange={(e) => setUnlock(e.target.value)} />
           </div>
           <button type="button" className="btn-primary w-full" disabled={!body.trim()} onClick={save}>
             <Lock size={18} /> {t('Seal it')}

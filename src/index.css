@@ -6,19 +6,35 @@
   --font-serif: 'Fraunces', ui-serif, Georgia, serif;
   --font-script: 'Caveat', ui-serif, cursive;
 
-  --color-cream: #fff6f0;
-  --color-cream-deep: #fbe9df;
-  --color-coral: #e8927c;
-  --color-coral-deep: #d87862;
-  --color-coral-soft: #e8b4a0;
+  /* Pressed-stationery palette: blush paper, warm ink, coral as the primary, gold as the second
+     accent. Sage stays for "done" so a completed thing never reads as an accent. */
+  --color-cream: #fdf1ea;
+  --color-cream-deep: #f7e2d6;
+  --color-coral: #e0836b;
+  --color-coral-deep: #c86a51;
+  --color-coral-soft: #eeb49f;
   --color-sage: #7c8a6f;
   --color-sage-soft: #9ca77f;
   --color-gold: #f2c879;
-  --color-ink: #3a2e2b;
-  --color-ink-soft: #6f615c;
-  --color-paper: #fffdfb;
+  --color-ink: #43322c;
+  --color-ink-soft: #8a736a;
+  --color-paper: #fffaf6;
 
-  --radius-card: 1.5rem;
+  /* Panels are deep and soft; dense list rows are tighter and flatter (see .row below). */
+  --radius-card: 1.75rem;
+  --radius-row: 1rem;
+
+  /* One type scale, a little larger and looser than Tailwind's default, for a printed feel. */
+  --text-xs: 0.7813rem;
+  --text-xs--line-height: 1.45;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem;
+  --text-base--line-height: 1.62;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.4;
+  --text-3xl: 2.05rem;
+  --text-3xl--line-height: 1.15;
 }
 
 :root {
@@ -28,18 +44,17 @@
 /* Cozy warm-dark theme — overrides the palette variables; accent (--color-coral) is set separately. */
 [data-theme='dark'] {
   color-scheme: dark;
-  --color-cream: #211c1a;
-  --color-cream-deep: #2f2825;
-  --color-paper: #2a2421;
-  --color-ink: #f3e9e2;
-  --color-ink-soft: #b3a59d;
+  --color-cream: #1f1a18;
+  --color-cream-deep: #302825;
+  --color-paper: #292220;
+  --color-ink: #f4ebe4;
+  --color-ink-soft: #b6a79f;
 }
 
 [data-theme='dark'] .berdua-bg {
-  background:
-    radial-gradient(120% 60% at 50% -10%, #3a2e2b 0%, transparent 60%),
-    radial-gradient(80% 50% at 100% 100%, #2c2421 0%, transparent 55%),
-    var(--color-cream);
+  background-color: var(--color-cream);
+  background-image: radial-gradient(rgba(255, 250, 246, 0.03) 1px, transparent 1px);
+  background-size: 3px 3px;
 }
 
 /* Pet habitat scene — warm by day, cozy-dark at night. */
@@ -78,27 +93,81 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* a soft warm gradient backdrop for the whole app */
+/* Paper, not a colour wash: flat blush stock with a fine grain you only notice up close. */
 .berdua-bg {
-  background:
-    radial-gradient(120% 60% at 50% -10%, #ffe9dd 0%, transparent 60%),
-    radial-gradient(80% 50% at 100% 100%, #f3ece0 0%, transparent 55%),
-    var(--color-cream);
+  background-color: var(--color-cream);
+  background-image: radial-gradient(rgba(122, 74, 52, 0.05) 1px, transparent 1px);
+  background-size: 3px 3px;
 }
 
 @layer components {
+  /* A panel has a letterpress edge: hairline rim, a highlight along the top, one soft drop. */
   .card {
-    @apply rounded-[var(--radius-card)] bg-paper shadow-[0_8px_30px_-12px_rgba(58,46,43,0.18)] ring-1 ring-ink/5;
+    border-radius: var(--radius-card);
+    background-color: var(--color-paper);
+    border: 1px solid rgba(122, 74, 52, 0.1);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 12px 26px -16px rgba(122, 74, 52, 0.5);
   }
+  /* Dense rows, and every panel on a list screen, stay flat and tight so a long list reads as one
+     column of paper instead of a stack of floating tiles. Identity comes from the row's own
+     content (the tinted check, the section header), never from a coloured left border. */
+  .row,
+  [data-surface='list'] .card {
+    border-radius: var(--radius-row);
+    background-color: var(--color-paper);
+    border: 1px solid rgba(67, 50, 44, 0.09);
+    box-shadow: 0 1px 2px rgba(67, 50, 44, 0.05);
+  }
+  /* coral-deep, not coral: white on the lighter coral sits under 3:1. */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-coral px-5 py-3 font-bold text-white shadow-sm transition active:scale-[0.97] disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-coral-deep px-5 py-3 font-bold text-white transition active:scale-[0.97] disabled:opacity-50;
+    box-shadow: 0 8px 16px -8px rgba(200, 106, 81, 0.75);
   }
   .btn-soft {
     @apply inline-flex items-center justify-center gap-2 rounded-full bg-cream-deep px-4 py-2.5 font-semibold text-ink transition active:scale-[0.97];
+    box-shadow: inset 0 1px 2px rgba(122, 74, 52, 0.12);
   }
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition;
+    box-shadow: inset 0 1px 2px rgba(122, 74, 52, 0.1);
   }
+  /* One input recipe for the whole app: a pressed well with a hairline rim, and a focus ring that
+     reads without shouting. Previously this string was copy-pasted into nine files. */
+  .field {
+    @apply w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/75 outline-none;
+    border: 1px solid rgba(122, 74, 52, 0.12);
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+  .field:focus,
+  .field:focus-within {
+    border-color: var(--color-coral);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-coral) 22%, transparent);
+  }
+}
+
+/* Dark paper takes no white highlight and almost no drop: depth comes from the rim alone. */
+[data-theme='dark'] .card {
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 12px 26px -18px rgba(0, 0, 0, 0.75);
+}
+[data-theme='dark'] .row,
+[data-theme='dark'] [data-surface='list'] .card {
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: none;
+}
+[data-theme='dark'] .chip,
+[data-theme='dark'] .btn-soft {
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+[data-theme='dark'] .btn-primary {
+  box-shadow: 0 8px 16px -10px rgba(0, 0, 0, 0.8);
+}
+[data-theme='dark'] .field {
+  border-color: rgba(255, 255, 255, 0.09);
 }
 
 /* ── Map pins (MapLibre custom DOM markers) ── */
@@ -109,7 +178,7 @@ body {
   background: transparent;
   cursor: pointer;
   transform-origin: bottom center;
-  filter: drop-shadow(0 3px 3px rgba(58, 46, 43, 0.35));
+  filter: drop-shadow(0 3px 3px rgba(67, 50, 44, 0.35));
   transition: transform 0.15s ease;
 }
 .place-pin:active {

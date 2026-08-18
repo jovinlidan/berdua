@@ -15,8 +15,6 @@ import { compressImage } from '../lib/photos'
 import { useSession } from '../store/useSession'
 import type { Secret } from '../types'
 
-const FIELD =
-  'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
 const onlyDigits = (s: string) => s.replace(/\D/g, '').slice(0, 6)
 
 export default function Secrets() {
@@ -91,7 +89,7 @@ export default function Secrets() {
 
       <div className="card mb-4 flex items-center gap-2 p-3">
         <input
-          className={FIELD}
+          className="field"
           placeholder={t('A private note or to-do…')}
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -102,7 +100,7 @@ export default function Secrets() {
           onClick={add}
           disabled={!text.trim()}
           aria-label={t('Add secret')}
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral text-white transition active:scale-90 disabled:opacity-40"
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral-deep text-white transition active:scale-90 disabled:opacity-40"
         >
           <Plus size={24} />
         </button>
@@ -146,7 +144,7 @@ export default function Secrets() {
               placeholder={t('Choose a 4–6 digit PIN')}
               value={newPin}
               onChange={(e) => setNewPin(onlyDigits(e.target.value))}
-              className={FIELD}
+              className="field"
               autoFocus
             />
             <button

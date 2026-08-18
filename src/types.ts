@@ -74,6 +74,40 @@ export interface Place {
   address?: string // readable full address, when known
 }
 
+// ── Routines (an activity that repeats over many days) ─────────────────────────
+/** How often a routine comes back around. */
+export type RoutineFreq = 'daily' | 'weekly' | 'monthly'
+
+/**
+ * The repeat rule that turns a one-off activity into a routine. Days are plain ISO `yyyy-mm-dd`
+ * keys and the time is a local `HH:mm` wall-clock string, never absolute instants, so the same
+ * rule means the same thing on both phones AND inside the serverless cron, which only knows the
+ * couple's stored `tzOffsetMinutes`. Occurrences are derived on read (see `lib/recurrence.ts`);
+ * nothing is ever materialised into extra rows.
+ */
+export interface Routine {
+  freq: RoutineFreq
+  interval: number // every N days / weeks / months (≥ 1)
+  weekdays?: number[] // weekly only: 0=Sun to 6=Sat (defaults to the start day's weekday)
+  startDate: string // ISO yyyy-mm-dd, the first day it can happen
+  time?: string // 'HH:mm' local wall-clock for the nudge (absent = all-day, no push)
+  until?: string | null // ISO yyyy-mm-dd, inclusive last day (absent/null = keeps going)
+  count?: number | null // stop after N occurrences (absent/null = no limit)
+}
+
+/**
+ * One occurrence's state. `at` is per-day, so the merge can union two phones' ticks instead of
+ * last-write-wins clobbering them, so both partners can check off different days while offline.
+ */
+export interface RoutineTick {
+  done: boolean
+  at: number // epoch ms this tick was last flipped
+  by: PartnerKey
+}
+
+/** occurrence day (ISO yyyy-mm-dd) → its tick. Rides inside the synced Todo record. */
+export type RoutineLog = Record<string, RoutineTick>
+
 export interface Todo {
   id: string
   title: string
@@ -81,9 +115,11 @@ export interface Todo {
   category: string // a TodoGroup id (built-in key or a custom group id)
   done: boolean
   doneAt?: number
-  dueAt?: number // optional reminder time
+  dueAt?: number // optional reminder time (one-off; a routine carries its own time instead)
   addedBy: PartnerKey
   place?: Place // optional location — Food todos with a place are the dots on the Map screen
+  routine?: Routine // present → this is a repeating activity (a "routine")
+  routineLog?: RoutineLog // per-occurrence ticks; merged per day, not last-write-wins
   createdAt: number
   updatedAt: number
 }

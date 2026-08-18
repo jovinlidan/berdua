@@ -5,6 +5,7 @@ import {
   ListTodo,
   Mail,
   PartyPopper,
+  Repeat,
   Settings as SettingsIcon,
   Smile,
   Star,
@@ -16,7 +17,7 @@ import { PixelPet } from '../components/PixelPet'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { ThinkingOfYou } from '../components/ThinkingOfYou'
 import { statusText } from '../components/petUi'
-import { useBucket, useCouple, usePets, useSealedNotes, useTodayMood, useTodos } from '../db/hooks'
+import { useBucket, useCouple, usePets, useRoutinesToday, useSealedNotes, useTodayMood, useTodos } from '../db/hooks'
 import { daysTogether } from '../lib/dates'
 import { useT } from '../lib/i18n'
 import { stageOf } from '../lib/pet'
@@ -38,6 +39,7 @@ export default function Home() {
   const sealedNotes = useSealedNotes()
   const todayMood = useTodayMood()
   const pets = usePets()
+  const routinesToday = useRoutinesToday()
   const { activePartner } = useSession()
 
   if (!couple) return null
@@ -47,10 +49,12 @@ export default function Home() {
   const showAnniv = anniv && (anniv.isToday || anniv.daysUntil <= 45)
 
   const dreamsKept = (bucket ?? []).filter((b) => b.isComplete).length
+  const openDreams = (bucket ?? []).filter((b) => !b.isComplete).length
   const todosDone = (todos ?? []).filter((tt) => tt.done).length
   const capsuleCount = (sealedNotes ?? []).length
   const hasStats = dreamsKept + todosDone + capsuleCount > 0
-  const openTodos = (todos ?? []).filter((tt) => !tt.done).length
+  // Routines get their own card below, so they're left out of the wishlist count (never both).
+  const openTodos = (todos ?? []).filter((tt) => !tt.done && !tt.routine).length
   const lockedCapsules = (sealedNotes ?? []).filter((n) => n.unlockAt > Date.now()).length
 
   // To-dos with a reminder that's due today or already overdue.
@@ -64,6 +68,11 @@ export default function Home() {
     (tt) => (tt.dueAt as number) >= startOfToday.getTime() && (tt.dueAt as number) <= endOfToday.getTime(),
   ).length
   const hasUrgentTodos = overdueCount + dueTodayCount > 0
+
+  // Routines that come around today (each day is ticked off on its own).
+  const routines = routinesToday ?? []
+  const routinesDone = routines.filter((r) => r.done).length
+  const routinesLeft = routines.length - routinesDone
 
   const myMood = activePartner === 'A' ? todayMood?.moodA : todayMood?.moodB
   const theirMood = activePartner === 'A' ? todayMood?.moodB : todayMood?.moodA
@@ -164,6 +173,31 @@ export default function Home() {
         </Link>
       </motion.section>
 
+      {/* Today's routines */}
+      {routines.length > 0 && (
+        <motion.section {...fade(0.22)} className="mt-4">
+          <Link to="/routines" className="block">
+            <motion.div whileTap={{ scale: 0.99 }} className="card flex items-center gap-4 p-5">
+              <span
+                className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${
+                  routinesLeft > 0 ? 'bg-coral/15 text-coral' : 'bg-sage/15 text-sage'
+                }`}
+              >
+                <Repeat size={22} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-serif text-lg font-semibold text-ink">{t('Our routines today')}</p>
+                <p className={`truncate text-sm ${routinesLeft > 0 ? 'font-semibold text-coral-deep' : 'text-ink-soft'}`}>
+                  {routinesLeft > 0
+                    ? t('{done} of {total} done today', { done: routinesDone, total: routines.length })
+                    : t('All done today 💞')}
+                </p>
+              </div>
+            </motion.div>
+          </Link>
+        </motion.section>
+      )}
+
       {/* Wishlist summary */}
       {openTodos > 0 && (
         <motion.section {...fade(0.24)} className="mt-4">
@@ -192,6 +226,27 @@ export default function Home() {
           </Link>
         </motion.section>
       )}
+
+      {/* Bucket list: reached from here, not from the tab bar */}
+      <motion.section {...fade(0.26)} className="mt-4">
+        <Link to="/bucket" className="block">
+          <motion.div whileTap={{ scale: 0.99 }} className="card flex items-center gap-4 p-5">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gold/25 text-coral-deep">
+              <Star size={24} />
+            </span>
+            <div className="flex-1">
+              <p className="font-serif text-lg font-semibold text-ink">{t('Our bucket list')}</p>
+              <p className="text-sm text-ink-soft">
+                {openDreams > 0
+                  ? t('{n} to chase together', { n: openDreams })
+                  : dreamsKept > 0
+                    ? t('{n} kept together 💛', { n: dreamsKept })
+                    : t('Write down your first dream →')}
+              </p>
+            </div>
+          </motion.div>
+        </Link>
+      </motion.section>
 
       {/* Time capsules */}
       <motion.section {...fade(0.28)} className="mt-4">

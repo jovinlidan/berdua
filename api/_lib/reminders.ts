@@ -1,3 +1,9 @@
+import {
+  dayKeyOf,
+  isOccurrenceDone,
+  occurrenceInstant,
+  occurrenceKeys,
+} from '../../src/lib/recurrence.js'
 import type { SyncDoc } from '../../src/types.js'
 
 export interface ReminderEvent {
@@ -36,9 +42,11 @@ export function dueReminders(doc: SyncDoc, nowMs: number): ReminderEvent[] {
 
   if (prefs && inQuietHours(local.getUTCHours(), prefs.quietHoursStart, prefs.quietHoursEnd)) return []
 
-  // 1) wishlist due reminders (tz-independent — relative to the due instant)
+  // 1) wishlist due reminders (tz-independent, relative to the due instant). A routine is skipped
+  // here: its schedule comes from the repeat rule below, so honouring a leftover `dueAt` too would
+  // nudge twice for the same activity.
   for (const todo of doc.todos) {
-    if (todo.done || !todo.dueAt) continue
+    if (todo.done || !todo.dueAt || todo.routine) continue
     if (nowMs >= todo.dueAt - 30 * 60_000 && nowMs < todo.dueAt + 6 * HOUR) {
       // Include the scheduled instant so moving a reminder creates a new event instead of being
       // suppressed forever by the old date's dedupe entry.
@@ -47,6 +55,26 @@ export function dueReminders(doc: SyncDoc, nowMs: number): ReminderEvent[] {
         title: 'A little to-do ✅',
         body: todo.title,
         url: '/todos',
+      })
+    }
+  }
+
+  // 1b) routine occurrences. The rule is expanded in the couple's LOCAL calendar (a routine means
+  // "07:00 where they live", not a fixed instant), and each day gets its own dedupe key so a
+  // repeating activity nudges every time it comes around, and only for days still unticked.
+  const windowFrom = dayKeyOf(nowMs - 7 * HOUR, tz)
+  const windowTo = dayKeyOf(nowMs + HOUR, tz)
+  for (const todo of doc.todos) {
+    if (todo.done || !todo.routine?.time) continue // all-day routine → nothing to nudge at
+    for (const day of occurrenceKeys(todo.routine, windowFrom, windowTo, 8)) {
+      if (isOccurrenceDone(todo, day)) continue // already checked off together
+      const at = occurrenceInstant(day, todo.routine.time, tz)
+      if (nowMs < at - 30 * 60_000 || nowMs >= at + 6 * HOUR) continue
+      events.push({
+        key: `routine:${todo.id}:${day}`,
+        title: 'Routine time 🔁',
+        body: todo.title,
+        url: '/routines',
       })
     }
   }

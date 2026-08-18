@@ -1,0 +1,281 @@
+// The repeat editor: turns a one-off wishlist item into a routine that comes back over many days.
+// Everything it produces is a plain `Routine` rule (never a list of dates), so the same sheet is
+// used for composing a new activity and for editing an existing one.
+import { format, parseISO } from 'date-fns'
+import { Repeat } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  MAX_OCCURRENCES,
+  ROUTINE_FREQS,
+  ROUTINE_FREQ_LABELS,
+  WEEKDAY_KEYS,
+  addDaysKey,
+  nextOccurrenceKey,
+  occurrenceKeys,
+  routineSummary,
+  weekdayOf,
+} from '../lib/recurrence'
+import { todayIso } from '../lib/dates'
+import { haptic } from '../lib/haptics'
+import { activeDateLocale, useT } from '../lib/i18n'
+import type { Routine, RoutineFreq } from '../types'
+import { BottomSheet } from './BottomSheet'
+import { Chip } from './Chip'
+
+const UNIT_LABELS: Record<RoutineFreq, [one: string, many: string]> = {
+  daily: ['day', 'days'],
+  weekly: ['week', 'weeks'],
+  monthly: ['month', 'months'],
+}
+type EndMode = 'never' | 'on' | 'after'
+
+export function RoutineSheet({
+  open,
+  onClose,
+  value,
+  onSave,
+}: {
+  open: boolean
+  onClose: () => void
+  value?: Routine | null
+  onSave: (routine: Routine) => void
+}) {
+  const t = useT()
+  const locale = activeDateLocale()
+  const [freq, setFreq] = useState<RoutineFreq>('daily')
+  const [every, setEvery] = useState(1)
+  const [weekdays, setWeekdays] = useState<number[]>([])
+  // True while the weekday set is only a suggestion derived from the start date. The first tap
+  // REPLACES it: otherwise picking Tuesday and Thursday on a Friday quietly gives you three days.
+  const [weekdaysAuto, setWeekdaysAuto] = useState(true)
+  const [startDate, setStartDate] = useState(todayIso)
+  const [time, setTime] = useState('')
+  const [endMode, setEndMode] = useState<EndMode>('never')
+  const [until, setUntil] = useState('')
+  const [count, setCount] = useState(10)
+
+  // Seed the form from the rule being edited, but ONLY as the sheet opens: `value` comes from a
+  // live Dexie query, so any unrelated write re-creates that object, and re-seeding on it would
+  // wipe an edit in progress.
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    if (!open) {
+      wasOpen.current = false
+      return
+    }
+    if (wasOpen.current) return
+    wasOpen.current = true
+    const routine = value
+    const start = routine?.startDate || todayIso()
+    setFreq(routine?.freq ?? 'daily')
+    setEvery(routine?.interval ?? 1)
+    setWeekdays(routine?.weekdays?.length ? routine.weekdays : [weekdayOf(start)])
+    setWeekdaysAuto(!routine?.weekdays?.length)
+    setStartDate(start)
+    setTime(routine?.time ?? '')
+    setEndMode(routine?.count ? 'after' : routine?.until ? 'on' : 'never')
+    setUntil(routine?.until ?? '')
+    setCount(routine?.count ?? 10)
+  }, [open, value])
+
+  const draft: Routine = useMemo(
+    () => ({
+      freq,
+      interval: every,
+      weekdays: freq === 'weekly' ? weekdays : undefined,
+      startDate,
+      time: time || undefined,
+      until: endMode === 'on' && until ? until : null,
+      count: endMode === 'after' ? count : null,
+    }),
+    [freq, every, weekdays, startDate, time, endMode, until, count],
+  )
+
+  // A weekly rule with no weekday can't land anywhere, and "ends on a date" with no date would
+  // save as an endless routine. Either way, name what is missing instead of saving something else.
+  const missing =
+    freq === 'weekly' && weekdays.length === 0
+      ? 'Pick at least one day'
+      : endMode === 'on' && !until
+        ? 'Pick the day it ends'
+        : null
+  const valid = missing === null
+  const preview = useMemo(() => {
+    if (!valid) return []
+    const from = nextOccurrenceKey(draft, startDate) ?? startDate
+    return occurrenceKeys(draft, from, addDaysKey(from, 366 * 2), 3)
+  }, [draft, startDate, valid])
+
+  function toggleWeekday(day: number) {
+    haptic(4)
+    if (weekdaysAuto) {
+      setWeekdaysAuto(false)
+      setWeekdays([day])
+      return
+    }
+    setWeekdays((current) =>
+      current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort((a, b) => a - b),
+    )
+  }
+
+  /** Moving the start date re-suggests its weekday, but never overrides days you picked. */
+  function pickStartDate(day: string) {
+    setStartDate(day)
+    if (weekdaysAuto && day) setWeekdays([weekdayOf(day)])
+  }
+
+  const [unitOne, unitMany] = UNIT_LABELS[freq]
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title={t('Repeat this')}>
+      <div className="space-y-4">
+        {/* how often */}
+        <div className="flex gap-2">
+          {ROUTINE_FREQS.map((f) => (
+            <Chip
+              key={f}
+              active={freq === f}
+              onClick={() => {
+                haptic(4)
+                setFreq(f)
+              }}
+            >
+              {t(ROUTINE_FREQ_LABELS[f])}
+            </Chip>
+          ))}
+        </div>
+
+        {/* every N days/weeks/months */}
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-ink-soft">{t('Every')}</span>
+          <div className="flex items-center gap-2 rounded-full bg-cream-deep px-1.5 py-1">
+            <button
+              type="button"
+              onClick={() => setEvery((n) => Math.max(1, n - 1))}
+              aria-label={t('Decrease interval')}
+              className="grid h-8 w-8 place-items-center rounded-full text-lg font-bold text-ink-soft active:scale-90"
+            >
+              −
+            </button>
+            <span className="min-w-6 text-center font-bold text-ink">{every}</span>
+            <button
+              type="button"
+              onClick={() => setEvery((n) => Math.min(99, n + 1))}
+              aria-label={t('Increase interval')}
+              className="grid h-8 w-8 place-items-center rounded-full text-lg font-bold text-ink-soft active:scale-90"
+            >
+              +
+            </button>
+          </div>
+          <span className="text-sm font-bold text-ink-soft">{every === 1 ? t(unitOne) : t(unitMany)}</span>
+        </div>
+
+        {/* which days (weekly only) */}
+        {freq === 'weekly' && (
+          <div>
+            <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('On these days')}</label>
+            <div className="flex gap-1.5">
+              {WEEKDAY_KEYS.map((key, day) => {
+                const on = weekdays.includes(day)
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => toggleWeekday(day)}
+                    aria-pressed={on}
+                    aria-label={t(key)}
+                    className={`h-11 flex-1 rounded-xl text-[11px] font-bold transition active:scale-90 ${
+                      on ? 'bg-coral-deep text-white' : 'bg-cream-deep text-ink-soft'
+                    }`}
+                  >
+                    {t(key)}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* start + time of day */}
+        <div className="flex gap-3">
+          <div className="min-w-0 flex-1">
+            <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Starts')}</label>
+            <input type="date" className="field" value={startDate} onChange={(e) => pickStartDate(e.target.value)} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Time (optional)')}</label>
+            <input type="time" className="field" value={time} onChange={(e) => setTime(e.target.value)} />
+          </div>
+        </div>
+
+        {/* when it stops */}
+        <div>
+          <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Ends')}</label>
+          <div className="flex gap-2">
+            {(['never', 'on', 'after'] as EndMode[]).map((mode) => (
+              <Chip
+                key={mode}
+                active={endMode === mode}
+                onClick={() => {
+                  haptic(4)
+                  setEndMode(mode)
+                }}
+              >
+                {t(mode === 'never' ? 'Never' : mode === 'on' ? 'On a date' : 'After')}
+              </Chip>
+            ))}
+          </div>
+          {endMode === 'on' && (
+            <input
+              type="date"
+              className="field mt-2"
+              value={until}
+              min={startDate}
+              onChange={(e) => setUntil(e.target.value)}
+            />
+          )}
+          {endMode === 'after' && (
+            <div className="mt-2 flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={MAX_OCCURRENCES}
+                className="field"
+                value={count}
+                onChange={(e) => setCount(Math.max(1, Math.min(MAX_OCCURRENCES, Number(e.target.value) || 1)))}
+              />
+              <span className="shrink-0 text-sm font-bold text-ink-soft">{t('times')}</span>
+            </div>
+          )}
+        </div>
+
+        {/* live read-back of the rule + its first few days */}
+        <div className="rounded-2xl bg-cream-deep p-3.5">
+          <p className="flex items-center gap-2 font-semibold text-ink">
+            <Repeat size={15} className="shrink-0 text-ink-soft" />
+            {valid ? routineSummary(draft, t) : t(missing)}
+          </p>
+          {preview.length > 0 && (
+            <p className="mt-1 text-sm text-ink-soft">
+              {t('Next: {days}', {
+                days: preview.map((day) => format(parseISO(day), 'EEE, MMM d', { locale })).join(' · '),
+              })}
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className="btn-primary w-full"
+          disabled={!valid}
+          onClick={() => {
+            haptic(8)
+            onSave(draft)
+          }}
+        >
+          {t('Save routine')}
+        </button>
+      </div>
+    </BottomSheet>
+  )
+}

@@ -42,7 +42,9 @@ export function PetCompanion() {
         <button
           type="button"
           onClick={() => setAdopt(true)}
-          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex items-center gap-1.5 rounded-full bg-paper/95 py-2 pl-2.5 pr-3.5 text-sm font-bold text-ink shadow-[0_8px_24px_-8px_rgba(58,46,43,0.45)] ring-1 ring-ink/5 backdrop-blur active:scale-95"
+          // Bottom LEFT on purpose: the bottom-right corner belongs to a screen's own primary
+          // action (the + on Bucket and Capsule), and this pill used to sit on top of it.
+          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-4 z-30 flex items-center gap-1.5 rounded-full bg-paper/95 py-2 pl-2.5 pr-3.5 text-sm font-bold text-ink shadow-[0_8px_24px_-8px_rgba(58,46,43,0.45)] ring-1 ring-ink/5 backdrop-blur active:scale-95"
         >
           <motion.span
             animate={{ rotate: [0, -8, 8, -8, 0] }}

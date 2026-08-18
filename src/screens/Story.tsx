@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { CalendarHeart, CheckCircle2, Heart, Mail, Star } from 'lucide-react'
+import { CalendarHeart, CheckCircle2, Heart, Mail, Repeat, Star } from 'lucide-react'
 import { type ReactNode } from 'react'
 import { AnimatedCounter } from '../components/AnimatedCounter'
 import { PageHeader } from '../components/PageHeader'
@@ -7,6 +7,7 @@ import { useBucket, useCouple, useSealedNotes, useTodos } from '../db/hooks'
 import { daysTogether } from '../lib/dates'
 import { useT } from '../lib/i18n'
 import { nextAnniversary, ordinalYear } from '../lib/milestones'
+import { routineProgress } from '../lib/recurrence'
 
 const fade = (delay = 0) => ({
   initial: { opacity: 0, y: 12 },
@@ -28,6 +29,8 @@ export default function Story() {
   const dreamsKept = (bucket ?? []).filter((b) => b.isComplete).length
   const todosDone = (todos ?? []).filter((t) => t.done).length
   const capsuleCount = (capsules ?? []).length
+  // Every occurrence the two of you ticked off across all routines.
+  const routineDays = (todos ?? []).reduce((sum, t) => sum + (t.routine ? routineProgress(t).done : 0), 0)
 
   return (
     <div className="pt-[calc(0.4rem+env(safe-area-inset-top))]">
@@ -63,6 +66,16 @@ export default function Story() {
         <Stat icon={<CheckCircle2 size={18} />} value={todosDone} label={t('to-dos')} />
         <Stat icon={<Mail size={18} />} value={capsuleCount} label={t('capsules')} />
       </motion.div>
+
+      {routineDays > 0 && (
+        <motion.p
+          {...fade(0.12)}
+          className="mx-auto flex w-fit items-center gap-1.5 rounded-full bg-cream-deep px-3 py-1.5 text-sm font-semibold text-ink"
+        >
+          <Repeat size={15} className="text-ink-soft" />
+          {t('{n} routine days kept together', { n: routineDays })}
+        </motion.p>
+      )}
 
       <motion.p {...fade(0.16)} className="mt-8 text-center font-script text-2xl text-coral-soft">
         {t('and the best is yet to come 💞')}

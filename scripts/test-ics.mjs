@@ -30,5 +30,22 @@ ok(ics.includes('\r\n'), 'CRLF line endings')
 // timezone-independence: same epoch → same DTSTART regardless of process TZ
 ok(ics.includes('DTSTART:20260701T110000Z'), `DTSTART stable under TZ=${process.env.TZ ?? '(system)'}`)
 
+// a routine exports as one REPEATING event (the rule itself lives in lib/recurrence.ts)
+const repeating = buildDateIcs({
+  id: 'routine1',
+  title: 'Evening walk',
+  start,
+  rrule: 'FREQ=WEEKLY;BYDAY=MO,WE',
+  stamp: Date.UTC(2026, 5, 15, 0, 0, 0),
+})
+ok(repeating.includes('RRULE:FREQ=WEEKLY;BYDAY=MO,WE'), 'RRULE line for a repeating event')
+ok(repeating.indexOf('RRULE:') > repeating.indexOf('DTEND:'), 'RRULE comes after the times')
+
+// an all-day series carries DATE values (and no midnight alarm)
+const allDay = buildDateIcs({ id: 'routine2', title: 'Water the plants', start, allDay: true, rrule: 'FREQ=DAILY' })
+ok(allDay.includes('DTSTART;VALUE=DATE:'), 'all-day DTSTART is a DATE value')
+ok(allDay.includes('DTEND;VALUE=DATE:'), 'all-day DTEND is a DATE value')
+ok(!allDay.includes('BEGIN:VALARM'), 'no alarm on an all-day event')
+
 console.log(fails === 0 ? 'PASS' : `FAIL (${fails})`)
 process.exit(fails === 0 ? 0 : 1)

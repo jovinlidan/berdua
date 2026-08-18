@@ -4,6 +4,7 @@
 import { todayIso } from '../lib/dates'
 import { newId } from '../lib/id'
 import { MAX_PETS, type PetAction, applyAction } from '../lib/pet'
+import { normalizeRoutine, routineActiveKey, toggleTickIn } from '../lib/recurrence'
 import { notifyChange } from '../sync/bus'
 import type {
   BucketItem,
@@ -13,6 +14,7 @@ import type {
   Pet,
   PetSpecies,
   Place,
+  Routine,
   SyncTable,
   Todo,
   TodoGroup,
@@ -144,16 +146,21 @@ export async function addTodo(input: {
   category: string
   addedBy: PartnerKey
   dueAt?: number
+  routine?: Routine
 }): Promise<string> {
   const id = newId()
+  const routine = input.routine ? normalizeRoutine(input.routine) : undefined
   await db.todos.add({
     id,
     title: input.title,
     note: input.note?.trim() || undefined,
     category: input.category,
     done: false,
-    dueAt: input.dueAt,
+    // A routine carries its own schedule, so it never also holds a one-off `dueAt`, which would
+    // notify twice for the same activity (see api/_lib/reminders.ts).
+    dueAt: routine ? undefined : input.dueAt,
     addedBy: input.addedBy,
+    routine,
     createdAt: now(),
     updatedAt: now(),
   })
@@ -274,11 +281,47 @@ export async function importFoodPlaces(
   return result
 }
 
-export async function toggleTodo(id: string): Promise<void> {
+/**
+ * Check a to-do off. A ROUTINE is never "done" as a whole. One tap ticks the occurrence it's
+ * currently standing on instead (today's, or the nearest one; see `routineActiveKey`), so the
+ * activity keeps coming back and `clearDoneTodos` never sweeps it away.
+ */
+export async function toggleTodo(id: string, by: PartnerKey = 'A'): Promise<void> {
   await db.transaction('rw', db.todos, async () => {
     const t = await db.todos.get(id)
     if (!t) return
+    if (t.routine) {
+      const key = routineActiveKey(t.routine, todayIso())
+      if (!key) return
+      await db.todos.update(id, { routineLog: toggleTickIn(t.routineLog, key, by, now()), updatedAt: now() })
+      return
+    }
     await db.todos.update(id, { done: !t.done, doneAt: !t.done ? now() : undefined, updatedAt: now() })
+  })
+  notifyChange()
+}
+
+// ── Routines (a to-do that repeats over many days) ─────────────────────────────
+/**
+ * Turn a to-do into a routine (or replace its repeat rule). Clears the one-off reminder, and also
+ * `done`: a routine is never finished as a whole, and a `done` routine would be invisible to the
+ * reminders and to Home while `clearDoneTodos` quietly deleted it along with its tick history.
+ */
+export async function setTodoRoutine(id: string, routine: Routine): Promise<void> {
+  await updateTodo(id, { routine: normalizeRoutine(routine), dueAt: undefined, done: false, doneAt: undefined })
+}
+
+/** Stop repeating. The tick history stays, so re-enabling the routine brings its streak back. */
+export async function clearTodoRoutine(id: string): Promise<void> {
+  await updateTodo(id, { routine: undefined })
+}
+
+/** Tick (or untick) one specific occurrence day, used by the calendar's day detail. */
+export async function toggleRoutineOccurrence(id: string, dayKey: string, by: PartnerKey): Promise<void> {
+  await db.transaction('rw', db.todos, async () => {
+    const t = await db.todos.get(id)
+    if (!t?.routine) return
+    await db.todos.update(id, { routineLog: toggleTickIn(t.routineLog, dayKey, by, now()), updatedAt: now() })
   })
   notifyChange()
 }

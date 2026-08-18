@@ -44,7 +44,7 @@ export function AppShell() {
       <div className="mx-auto w-full max-w-md px-4">
         <WaitingBanner />
       </div>
-      <main className={`mx-auto w-full max-w-md ${fullBleed ? 'px-0 pb-0' : 'px-4'} ${focusedComposer || fullBleed ? 'pb-0' : 'pb-28'}`}>
+      <main className={`mx-auto w-full max-w-md ${fullBleed ? 'px-0 pb-0' : 'px-4'} ${focusedComposer || fullBleed ? 'pb-0' : 'pb-36'}`}>
         <motion.div
           key={location.pathname}
           initial={{ opacity: 0 }}

@@ -9,9 +9,6 @@ import type { BucketItem, LinkSource, WishLevel } from '../types'
 import { BottomSheet } from './BottomSheet'
 import { Chip } from './Chip'
 
-const FIELD =
-  'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
-
 export function BucketFormSheet({
   open,
   onClose,
@@ -91,7 +88,7 @@ export function BucketFormSheet({
         {/* Paste a link → auto-fills below */}
         <div>
           <input
-            className={FIELD}
+            className="field"
             inputMode="url"
             placeholder={t('Paste a TikTok / Instagram link… ✨')}
             value={link}
@@ -115,7 +112,7 @@ export function BucketFormSheet({
         </div>
 
         <input
-          className={FIELD}
+          className="field"
           placeholder={t('Something we want to do someday…')}
           value={title}
           onChange={(e) => {
@@ -134,7 +131,7 @@ export function BucketFormSheet({
           </div>
         </div>
         <textarea
-          className={FIELD}
+          className="field"
           rows={2}
           placeholder={t('Why it matters (optional)')}
           value={note}

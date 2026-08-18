@@ -11,9 +11,6 @@ import { otherPartner, PARTNER_COLORS, partnerName } from '../lib/partners'
 import { DAILY_MOODS, moodEmoji } from '../lib/taxonomy'
 import { useSession } from '../store/useSession'
 
-const FIELD =
-  'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
-
 export default function DailyCheckIn() {
   const t = useT()
   const couple = useCouple()
@@ -93,7 +90,7 @@ export default function DailyCheckIn() {
 
       {myMood && (
         <input
-          className={`${FIELD} mt-3`}
+          className="field mt-3"
           placeholder={t('A word about your day (optional)…')}
           defaultValue={myNote ?? ''}
           onChange={(e) => setNote(e.target.value)}

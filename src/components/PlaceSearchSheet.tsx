@@ -12,9 +12,6 @@ import { useSession } from '../store/useSession'
 import type { Place, Todo } from '../types'
 import { BottomSheet } from './BottomSheet'
 
-const FIELD =
-  'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
-
 export function PlaceSearchSheet({
   open,
   onClose,
@@ -153,7 +150,7 @@ export function PlaceSearchSheet({
         <div className="relative">
           <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-soft/70" />
           <input
-            className={`${FIELD} pl-10`}
+            className="field pl-10"
             placeholder={t('Search a place by name…')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -202,7 +199,7 @@ export function PlaceSearchSheet({
           </button>
           <div className="flex gap-2">
             <input
-              className={`${FIELD} flex-1`}
+              className="field flex-1"
               placeholder={t('Paste a link or coordinates')}
               value={linkInput}
               onChange={(e) => setLinkInput(e.target.value)}
@@ -233,7 +230,7 @@ export function PlaceSearchSheet({
               </div>
             </div>
             <input
-              className={FIELD}
+              className="field"
               placeholder={t('Name this spot…')}
               value={title}
               onChange={(e) => setTitle(e.target.value)}

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { CalendarDays, Home, ListTodo, MapPin, Star } from 'lucide-react'
+import { CalendarDays, Home, ListTodo, MapPin, Repeat } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useT } from '../lib/i18n'
 
@@ -7,7 +7,7 @@ const TABS = [
   { to: '/', label: 'Home', icon: Home, end: true },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays, end: false },
   { to: '/todos', label: 'Wishlist', icon: ListTodo, end: false },
-  { to: '/bucket', label: 'Bucket', icon: Star, end: false },
+  { to: '/routines', label: 'Routines', icon: Repeat, end: false },
   { to: '/map', label: 'Map', icon: MapPin, end: false },
 ]
 

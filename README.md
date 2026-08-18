@@ -6,7 +6,9 @@ couple's shared data between two phones through a private pairing code.
 ## What is included
 
 - Shared Wishlist with categories, reminders, swipe actions, and optional map locations
-- Calendar for dated Wishlist items, capsules, and anniversaries
+- Routines on their own screen: daily, weekly, or monthly rules with per-day check-offs and streaks
+- Calendar for dated Wishlist items, routine occurrences, capsules, and anniversaries
+- One-tap export of a dated item or a whole routine to each phone's own calendar app (.ics)
 - Bucket list, daily mood check-ins, time capsules, and Thinking-of-you history
 - Food map powered by MapLibre and keyless OpenStreetMap search
 - Shared pixel pets with a habitat and care actions
@@ -78,9 +80,10 @@ pnpm lint
 pnpm exec tsx scripts/test-pairing.ts
 pnpm exec tsx scripts/test-sync.ts
 pnpm exec tsx scripts/test-pet.ts
+pnpm exec tsx scripts/test-routine.ts
 ```
 
-The build, API type-check, and logic checks are expected to pass. `pnpm lint` currently reports 16
+The build, API type-check, and logic checks are expected to pass. `pnpm lint` currently reports 14
 known errors; cleaning that baseline is tracked in [tasks/todo.md](./tasks/todo.md). Do not introduce
 additional lint errors in new work.
 
@@ -119,7 +122,7 @@ scripts/         Logic and Playwright verification scripts
 src/components/  Shared UI and interaction components
 src/db/          Dexie database, hooks, and repository operations
 src/lib/         Dates, maps, notifications, pets, themes, and utilities
-src/screens/     Route-level screens
+src/screens/     Route-level screens (Wishlist is for one-off tasks; Routines for repeating ones)
 src/store/       Per-device Zustand session state
 src/sync/        Client sync engine and status tracking
 src/sw.ts        Offline cache, push, and notification service worker

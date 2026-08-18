@@ -81,9 +81,8 @@ export default function Bucket() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, x: -40, transition: { duration: 0.18 } }}
                 transition={{ type: 'spring', stiffness: 480, damping: 36 }}
-                className="card relative flex items-center gap-3 overflow-hidden p-4 pl-4"
+                className="card relative flex items-center gap-3 overflow-hidden p-4"
               >
-                <span className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: wl.tint }} />
                 <button
                   type="button"
                   onClick={() => complete(item)}
@@ -176,7 +175,7 @@ export default function Bucket() {
         type="button"
         onClick={() => setFormOpen(true)}
         aria-label={t('Add dream')}
-        className={`fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-coral text-white shadow-[0_12px_30px_-8px_rgba(232,146,124,0.9)] transition-opacity duration-200 active:scale-90 ${
+        className={`fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-coral-deep text-white shadow-[0_12px_30px_-10px_rgba(200,106,81,0.75)] transition-opacity duration-200 active:scale-90 ${
           formOpen || editing ? 'pointer-events-none opacity-0' : 'opacity-100'
         }`}
       >
