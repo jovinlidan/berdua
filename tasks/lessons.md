@@ -298,7 +298,22 @@ it produces standing evidence that a broken interaction works. Mouse and touch t
 through a gesture library, and the touch path is the only one users take.
 
 **How to apply:** Test gestures with `hasTouch: true` and dispatched `PointerEvent`s carrying
-`pointerType: 'touch'`. Where `drag` and a tap handler share an element, guard the tap with a ref set
-on drag start and cleared shortly after drag end (TodoRow already did this; RoamingPet did not).
-Always confirm a new regression test FAILS against the unfixed code, which is how the mouse case here
-was exposed as passing either way.
+`pointerType: 'touch'`. Always confirm a new regression test FAILS against the unfixed code, which is
+how the mouse case here was exposed as passing either way.
+
+**Refined after auditing the other three draggables, which all turned out to be fine.** The rule is
+narrower and more useful than "mouse differs from touch":
+
+- `drag` + **`onClick`** is SAFE. framer-motion installs its own click blocker after a drag, so the
+  click never reaches the handler. Map.tsx's sheet handle does exactly what looks like a bug (drag up
+  sets expanded, then `onClick` toggles it straight back) and works correctly with a finger at every
+  distance, because that click is swallowed. Verified with a control, since the naive test dispatches
+  a synthetic click: a synthetic click with NO preceding drag DOES toggle the sheet, so the "no click
+  after a drag" result is real and not an artefact of the instrument.
+- `drag` + **`onTap`** is BROKEN. framer-motion does not extend that suppression to its own tap
+  gesture, so `onTap` fires on the pointer-up ending a drag. This was the pet's bug, and `onTap` is
+  the only combination that needs the `dragged` ref guard.
+
+So when auditing, grep for `onTap` next to `drag`, not for every draggable. Checked and clean:
+Map.tsx (onClick), Todos.tsx TodoRow (onClick, and it has the ref guard anyway), PetHabitat.tsx
+(drag with no tap or click handler on the draggable at all).
