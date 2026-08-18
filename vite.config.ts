@@ -120,6 +120,11 @@ export default defineConfig({
       injectManifest: {
         // photos can be large; allow precaching the app shell comfortably
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // The Map screen is ~1MB of MapLibre, more than half the whole precache, and its tiles come
+        // from a remote host (see PlacesMap) so the screen cannot work offline whatever we cache.
+        // Precaching it meant every install, and every deploy after it, spent that megabyte on a
+        // tab many couples never open. It now loads on first visit and lives in the HTTP cache.
+        globIgnores: ['**/node_modules/**/*', '**/Map-*.js', '**/Map-*.css'],
       },
       devOptions: {
         enabled: true, // service worker active in `pnpm dev` so notifications are testable locally

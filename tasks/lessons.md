@@ -236,3 +236,51 @@ number will overstate the win by roughly 2x.
 and kills whole hypotheses. Attribute with a trace aggregated by event name (UpdateLayoutTree, Layout,
 Paint, RasterTask, Layerize, Commit), not a single fps number. Always re-run the baseline *last* and
 discard the first rep. `scripts/test-perf.mjs` does all of this.
+
+## 2026-08-18: A local test server without gzip makes every byte-size finding 3x too scary
+**Context:** Measuring cold start against a hand-rolled static server, first contentful paint came out
+at 3832ms on a throttled CPU and a slow connection, and the biggest entries were 301KB and 281KB of
+JS. Both numbers were fiction: the server sent raw bytes while any real host, Vercel included, serves
+gzip or brotli. Adding gzip to the test server changed the same measurement to 1544ms, and the same
+two files to 99KB and 90KB. Nearly a third of the apparent problem was the measuring instrument.
+
+**Lesson:** An uncompressed local server does not model production, and the error is not small. It
+overstates transfer time by roughly 3x for text assets, which is exactly the range that turns "fine"
+into "needs work" and invites a pile of unnecessary bundle surgery.
+
+**How to apply:** Compress text responses in any local server used for perf measurement before
+believing a single number from it, and read sizes from `encodedBodySize` rather than from disk. When
+a finding rests on bytes, state whether the number is compressed. [[measure-paint-before-fixing]]
+
+## 2026-08-18: unicode-range already solved the font problem, so trimming subsets bought nothing
+**Context:** The build shipped 744K of woff2 across 40 files, including cyrillic, cyrillic-ext and
+vietnamese subsets for an app that renders English and Indonesian. Trimming to per-subset, per-weight
+imports cut the deployed artifact from 3.8M to 2.7M and the files from 40 to 12. First contentful
+paint went from 1528ms to 1520ms. No change, because fontsource declares each subset with a
+`unicode-range`, so browsers were only ever downloading the latin files they needed. The unused
+subsets sat in the build costing users nothing, and they were not in the service worker precache
+either.
+
+**Lesson:** Bytes sitting in a build directory are not bytes a user downloads. `unicode-range`,
+lazy chunks and per-face font loading all mean the deployed size and the transferred size are
+different measurements. Worth doing for smaller deploys and a tidier artifact; wrong to describe as
+a speedup.
+
+**How to apply:** Before optimising an asset, check what the browser actually requests (the network
+panel, or `performance.getEntriesByType('resource')`), not what the build emitted. Then say which one
+improved. The same check found the real precache problem: 1012KB of the 1848KB precache was one lazy
+map chunk that every install paid for.
+
+## 2026-08-18: A rejected lazy import takes down the whole app, not just that screen
+**Context:** Every screen is `lazy(() => import(...))` behind a single root ErrorBoundary. Serving a
+build with one chunk file deleted showed the entire app replaced by the crash screen, nav and all,
+not merely a broken Map tab. This is reachable in normal use: a deploy renames every hashed chunk, so
+a tab left open across one asks for a file that no longer exists.
+
+**Lesson:** Code splitting quietly adds a failure mode per route, and the default blast radius is the
+whole application. A lazy boundary is not an error boundary.
+
+**How to apply:** Wrap the loader, not just the render: catch the import rejection, reload once when
+online (which is what actually fixes a post-deploy hash change) guarded by a sessionStorage flag so a
+genuine 404 cannot loop, and render a contained per-screen fallback otherwise. Verify by deleting a
+chunk from a build, and verify the before-state too, so the claim is measured rather than assumed.

@@ -1,4 +1,4 @@
-import { lazy, useEffect } from 'react'
+import { type ComponentType, lazy, useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -12,18 +12,60 @@ import { useSync } from './sync/useSync'
 import Home from './screens/Home'
 import Welcome from './screens/Welcome'
 
-const Bucket = lazy(() => import('./screens/Bucket'))
-const Calendar = lazy(() => import('./screens/Calendar'))
-const Capsule = lazy(() => import('./screens/Capsule'))
-const DailyCheckIn = lazy(() => import('./screens/DailyCheckIn'))
-const Map = lazy(() => import('./screens/Map'))
-const PetHabitat = lazy(() => import('./screens/PetHabitat'))
-const Routines = lazy(() => import('./screens/Routines'))
-const Secrets = lazy(() => import('./screens/Secrets'))
-const Settings = lazy(() => import('./screens/Settings'))
-const Story = lazy(() => import('./screens/Story'))
-const Thinking = lazy(() => import('./screens/Thinking'))
-const Todos = lazy(() => import('./screens/Todos'))
+const RELOADED_KEY = 'berdua-chunk-reload'
+
+/** Shown when a screen's code cannot be fetched at all, in place of crashing the whole app. */
+function ScreenUnavailable() {
+  return (
+    <div className="grid min-h-[60vh] place-items-center px-6 text-center">
+      <div>
+        <p className="text-5xl">🌙</p>
+        <p className="mt-3 font-serif text-lg font-semibold text-ink">This part needs a connection</p>
+        <p className="mt-1 text-sm text-ink-soft">
+          Everything already on your phone still works. Try again once you are back online.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Lazy-load a screen, surviving the two ways its chunk can fail to arrive.
+ *
+ * A deploy gives every chunk a new hashed name, so a tab that has been open across one asks for a
+ * file that no longer exists; one reload picks up the new index.html and fixes it for good. Offline,
+ * a reload cannot help, so the screen says so instead. Without this, either case rejects the lazy
+ * import and takes down the whole app through the root ErrorBoundary.
+ */
+function lazyScreen(load: () => Promise<{ default: ComponentType }>) {
+  return lazy(() =>
+    load()
+      .then((mod) => {
+        sessionStorage.removeItem(RELOADED_KEY)
+        return mod
+      })
+      .catch(() => {
+        const canRetry = navigator.onLine && !sessionStorage.getItem(RELOADED_KEY)
+        if (!canRetry) return { default: ScreenUnavailable }
+        sessionStorage.setItem(RELOADED_KEY, '1') // once only, so a real 404 cannot loop
+        window.location.reload()
+        return new Promise<{ default: ComponentType }>(() => {}) // the reload takes over
+      }),
+  )
+}
+
+const Bucket = lazyScreen(() => import('./screens/Bucket'))
+const Calendar = lazyScreen(() => import('./screens/Calendar'))
+const Capsule = lazyScreen(() => import('./screens/Capsule'))
+const DailyCheckIn = lazyScreen(() => import('./screens/DailyCheckIn'))
+const Map = lazyScreen(() => import('./screens/Map'))
+const PetHabitat = lazyScreen(() => import('./screens/PetHabitat'))
+const Routines = lazyScreen(() => import('./screens/Routines'))
+const Secrets = lazyScreen(() => import('./screens/Secrets'))
+const Settings = lazyScreen(() => import('./screens/Settings'))
+const Story = lazyScreen(() => import('./screens/Story'))
+const Thinking = lazyScreen(() => import('./screens/Thinking'))
+const Todos = lazyScreen(() => import('./screens/Todos'))
 
 function Splash() {
   return (
