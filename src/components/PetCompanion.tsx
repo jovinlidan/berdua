@@ -86,6 +86,11 @@ function RoamingPet({ pet, now, index, onTap }: { pet: Pet; now: number; index: 
   const [bounds, setBounds] = useState({ maxX: 0, maxY: 0 })
   const walkCtrl = useRef<AnimationPlaybackControls | null>(null)
   const pauseRef = useRef<number | undefined>(undefined)
+  // True from the moment a drag begins until just after it ends. framer-motion still fires onTap on
+  // the pointer-up that ENDS a drag, so without this, putting the pet down opened its care sheet
+  // every time. Only reproducible with a finger: on a mouse the tap is suppressed for us, which is
+  // why the mouse-driven drag test never caught it. Same guard TodoRow uses for its swipe.
+  const dragged = useRef(false)
 
   const overlayOpen = useOverlay((s) => s.open > 0)
 
@@ -148,19 +153,27 @@ function RoamingPet({ pet, now, index, onTap }: { pet: Pet; now: number; index: 
     <div className="pointer-events-none fixed inset-0 z-30 mx-auto max-w-md">
       <motion.button
         type="button"
-        onTap={onTap}
+        onTap={() => {
+          if (dragged.current) return
+          onTap()
+        }}
         aria-label={pet.name}
         drag
         dragMomentum={false}
         dragElastic={0.12}
         dragConstraints={{ left: 0, right: bounds.maxX, top: -bounds.maxY, bottom: 0 }}
         onDragStart={() => {
+          dragged.current = true
           walkCtrl.current?.stop()
           setWalking(false)
           setHeld(true)
           haptic(6)
         }}
-        onDragEnd={() => setHeld(false)}
+        onDragEnd={() => {
+          setHeld(false)
+          // outlive the onTap this pointer-up is about to fire, then allow taps again
+          window.setTimeout(() => (dragged.current = false), 80)
+        }}
         whileDrag={{ scale: 1.12 }}
         style={{ x, y, position: 'absolute', left: 0, bottom: 'calc(4.6rem + env(safe-area-inset-bottom))' }}
         className="pointer-events-auto grid touch-none cursor-grab place-items-center active:cursor-grabbing"
