@@ -3,7 +3,7 @@
 import { format, parseISO } from 'date-fns'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CalendarPlus, Check, Flame, Plus, Repeat, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { BottomSheet } from '../components/BottomSheet'
 import { EmptyState } from '../components/EmptyState'
@@ -44,16 +44,20 @@ export default function Routines() {
   const couple = useCouple()
   const routines = useRoutines()
   const activePartner = useSession((s) => s.activePartner)
-  const toast = useToast()
   const t = useT()
-  const [title, setTitle] = useState('')
-  // A routine always has a rule, so the composer starts with one instead of an empty state.
-  const [draft, setDraft] = useState<Routine>(dailyFromToday)
   const [editing, setEditing] = useState<Todo | null>(null)
-  const [edTitle, setEdTitle] = useState('')
-  const [edNote, setEdNote] = useState('')
-  const [rulesFor, setRulesFor] = useState<'new' | 'edit' | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Todo | null>(null)
+
+  const todayKeyForCheck = todayIso()
+  // Stable identities: both are props of the memoized RoutineRow, so a fresh closure per render
+  // would re-render every row (and recompute every streak) on any state change up here.
+  const onCheck = useCallback(
+    (r: Todo) => {
+      haptic(isOccurrenceDone(r, todayKeyForCheck) ? 4 : [8, 20])
+      void toggleRoutineOccurrence(r.id, todayKeyForCheck, activePartner)
+    },
+    [todayKeyForCheck, activePartner],
+  )
 
   if (!couple) return null
 
@@ -63,32 +67,6 @@ export default function Routines() {
   const todayIds = new Set(dueToday.map((r) => r.id))
   const later = list.filter((r) => !todayIds.has(r.id))
   const doneToday = dueToday.filter((r) => isOccurrenceDone(r, todayKey)).length
-
-  async function add() {
-    const text = title.trim()
-    if (!text) return
-    await addTodo({ title: text, category: ROUTINE_CATEGORY, addedBy: activePartner, routine: draft })
-    setTitle('')
-    setDraft(dailyFromToday())
-    haptic(8)
-    toast(t('Routine added'), '🔁')
-  }
-
-  function openEdit(routine: Todo) {
-    setEditing(routine)
-    setEdTitle(routine.title)
-    setEdNote(routine.note ?? '')
-  }
-
-  async function saveEdit() {
-    if (!editing) return
-    const text = edTitle.trim()
-    if (!text) return
-    await updateTodo(editing.id, { title: text, note: edNote.trim() || undefined })
-    haptic(8)
-    toast(t('Saved'))
-    setEditing(null)
-  }
 
   return (
     <div data-surface="list" className="pt-[calc(0.4rem+env(safe-area-inset-top))]">
@@ -101,34 +79,7 @@ export default function Routines() {
         }
       />
 
-      {/* compose: a title plus the rule that makes it a routine */}
-      <div className="card mb-5 p-3">
-        <div className="flex items-center gap-2">
-          <input
-            className="field"
-            placeholder={t('Add a routine…')}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && add()}
-          />
-          <button
-            type="button"
-            onClick={add}
-            disabled={!title.trim()}
-            aria-label={t('Add routine')}
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral-deep text-white transition active:scale-90 disabled:opacity-40"
-          >
-            <Plus size={24} />
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={() => setRulesFor('new')}
-          className="chip mt-2.5 bg-cream-deep text-ink-soft"
-        >
-          <Repeat size={14} /> {routineSummary(draft, t)}
-        </button>
-      </div>
+      <RoutineComposer />
 
       {list.length === 0 ? (
         <EmptyState
@@ -146,11 +97,9 @@ export default function Routines() {
                   routine={r}
                   couple={couple}
                   todayKey={todayKey}
-                  onCheck={() => {
-                    haptic(isOccurrenceDone(r, todayKey) ? 4 : [8, 20])
-                    void toggleRoutineOccurrence(r.id, todayKey, activePartner)
-                  }}
-                  onEdit={() => openEdit(r)}
+                  today
+                  onCheck={onCheck}
+                  onEdit={setEditing}
                 />
               ))}
             </Section>
@@ -158,108 +107,22 @@ export default function Routines() {
           {later.length > 0 && (
             <Section label={dueToday.length > 0 ? t('Coming up') : t('All routines')}>
               {later.map((r) => (
-                <RoutineRow key={r.id} routine={r} couple={couple} todayKey={todayKey} onEdit={() => openEdit(r)} />
+                <RoutineRow key={r.id} routine={r} couple={couple} todayKey={todayKey} onEdit={setEditing} />
               ))}
             </Section>
           )}
         </>
       )}
 
-      {/* edit one routine */}
-      <BottomSheet open={!!editing} onClose={() => setEditing(null)} title={t('Edit routine')}>
-        {editing && (
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Routine')}</label>
-              <input
-                className="field"
-                placeholder={t('What do you two do together?')}
-                value={edTitle}
-                onChange={(e) => setEdTitle(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Note (optional)')}</label>
-              <textarea
-                rows={3}
-                className="field resize-none"
-                placeholder={t('A little more detail…')}
-                value={edNote}
-                onChange={(e) => setEdNote(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Repeats')}</label>
-              <button
-                type="button"
-                onClick={() => setRulesFor('edit')}
-                className="field flex items-center gap-2 text-left"
-              >
-                <Repeat size={16} className="shrink-0 text-ink-soft" />
-                <span className="min-w-0 flex-1 truncate font-semibold text-ink">
-                  {editing.routine ? routineSummary(editing.routine, t) : t('Set the repeat')}
-                </span>
-                <span className="shrink-0 text-xs font-bold text-coral-deep">{t('Change')}</span>
-              </button>
-              <ProgressLine routine={editing} todayKey={todayKey} />
-            </div>
-            <button
-              type="button"
-              className="btn-soft w-full"
-              onClick={() => {
-                if (!downloadTodoIcs(editing)) return
-                haptic(6)
-                toast(t('Calendar file saved'), '🗓️')
-              }}
-            >
-              <CalendarPlus size={16} /> {t('Add to phone calendar')}
-            </button>
-            <button type="button" className="btn-primary w-full" disabled={!edTitle.trim()} onClick={saveEdit}>
-              {t('Save changes')}
-            </button>
-            <div className="flex justify-between">
-              <button
-                type="button"
-                className="text-sm font-bold text-ink-soft active:scale-95"
-                onClick={async () => {
-                  // Stops repeating, so it becomes an ordinary wishlist item again.
-                  await clearTodoRoutine(editing.id)
-                  setEditing(null)
-                  toast(t('Moved to the wishlist'))
-                }}
-              >
-                {t('Stop repeating')}
-              </button>
-              <button
-                type="button"
-                className="flex items-center gap-1.5 text-sm font-bold text-coral-deep active:scale-95"
-                onClick={() => {
-                  const target = editing
-                  setEditing(null)
-                  setPendingDelete(target)
-                }}
-              >
-                <Trash2 size={15} /> {t('Delete')}
-              </button>
-            </div>
-          </div>
-        )}
-      </BottomSheet>
-
-      {/* the repeat rule, for the composer or the routine being edited */}
-      <RoutineSheet
-        open={rulesFor !== null}
-        onClose={() => setRulesFor(null)}
-        value={rulesFor === 'edit' ? editing?.routine ?? null : draft}
-        onSave={async (rule) => {
-          if (rulesFor === 'edit' && editing) {
-            await setTodoRoutine(editing.id, rule)
-            setEditing({ ...editing, routine: rule })
-            toast(t('Routine saved'), '🔁')
-          } else {
-            setDraft(rule)
-          }
-          setRulesFor(null)
+      {/* edit one routine, and the repeat rule stacked on top of it */}
+      <RoutineEditSheet
+        routine={editing}
+        todayKey={todayKey}
+        onClose={() => setEditing(null)}
+        onChange={setEditing}
+        onRequestDelete={(target) => {
+          setEditing(null)
+          setPendingDelete(target)
         }}
       />
 
@@ -297,6 +160,213 @@ export default function Routines() {
   )
 }
 
+/**
+ * The composer, owning its own draft. Separate component so typing a routine name does not
+ * re-render the list below, where every row recomputes its streak, its progress and its next
+ * occurrence from the whole tick log.
+ */
+function RoutineComposer() {
+  const t = useT()
+  const toast = useToast()
+  const activePartner = useSession((s) => s.activePartner)
+  const [title, setTitle] = useState('')
+  // A routine always has a rule, so the composer starts with one instead of an empty state.
+  const [draft, setDraft] = useState<Routine>(dailyFromToday)
+  const [rules, setRules] = useState(false)
+
+  async function add() {
+    const text = title.trim()
+    if (!text) return
+    await addTodo({ title: text, category: ROUTINE_CATEGORY, addedBy: activePartner, routine: draft })
+    setTitle('')
+    setDraft(dailyFromToday())
+    haptic(8)
+    toast(t('Routine added'), '🔁')
+  }
+
+  return (
+    <>
+      {/* compose: a title plus the rule that makes it a routine */}
+      <div className="card mb-5 p-3">
+        <div className="flex items-center gap-2">
+          <input
+            className="field"
+            placeholder={t('Add a routine…')}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && add()}
+          />
+          <button
+            type="button"
+            onClick={add}
+            disabled={!title.trim()}
+            aria-label={t('Add routine')}
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral-deep text-white transition active:scale-90 disabled:opacity-40"
+          >
+            <Plus size={24} />
+          </button>
+        </div>
+        <button type="button" onClick={() => setRules(true)} className="chip mt-2.5 bg-cream-deep text-ink-soft">
+          <Repeat size={14} /> {routineSummary(draft, t)}
+        </button>
+      </div>
+      <RoutineSheet
+        open={rules}
+        onClose={() => setRules(false)}
+        value={draft}
+        onSave={(rule) => {
+          setDraft(rule)
+          setRules(false)
+        }}
+      />
+    </>
+  )
+}
+
+/** Edit sheet for one routine, with the repeat-rule sheet stacked on top of it. */
+function RoutineEditSheet({
+  routine,
+  todayKey,
+  onClose,
+  onChange,
+  onRequestDelete,
+}: {
+  routine: Todo | null
+  todayKey: string
+  onClose: () => void
+  onChange: (r: Todo) => void
+  onRequestDelete: (r: Todo) => void
+}) {
+  const t = useT()
+  return (
+    <BottomSheet open={!!routine} onClose={onClose} title={t('Edit routine')}>
+      {/* keyed by id: opening a different routine mounts a fresh form, so no seeding effect */}
+      {routine && (
+        <RoutineEditForm
+          key={routine.id}
+          routine={routine}
+          todayKey={todayKey}
+          onClose={onClose}
+          onChange={onChange}
+          onRequestDelete={onRequestDelete}
+        />
+      )}
+    </BottomSheet>
+  )
+}
+
+function RoutineEditForm({
+  routine,
+  todayKey,
+  onClose,
+  onChange,
+  onRequestDelete,
+}: {
+  routine: Todo
+  todayKey: string
+  onClose: () => void
+  onChange: (r: Todo) => void
+  onRequestDelete: (r: Todo) => void
+}) {
+  const t = useT()
+  const toast = useToast()
+  const [title, setTitle] = useState(routine.title)
+  const [note, setNote] = useState(routine.note ?? '')
+  const [rules, setRules] = useState(false)
+
+  async function save() {
+    const text = title.trim()
+    if (!text) return
+    await updateTodo(routine.id, { title: text, note: note.trim() || undefined })
+    haptic(8)
+    toast(t('Saved'))
+    onClose()
+  }
+
+  return (
+    <>
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Routine')}</label>
+          <input
+            className="field"
+            placeholder={t('What do you two do together?')}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Note (optional)')}</label>
+          <textarea
+            rows={3}
+            className="field resize-none"
+            placeholder={t('A little more detail…')}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Repeats')}</label>
+          <button type="button" onClick={() => setRules(true)} className="field flex items-center gap-2 text-left">
+            <Repeat size={16} className="shrink-0 text-ink-soft" />
+            <span className="min-w-0 flex-1 truncate font-semibold text-ink">
+              {routine.routine ? routineSummary(routine.routine, t) : t('Set the repeat')}
+            </span>
+            <span className="shrink-0 text-xs font-bold text-coral-deep">{t('Change')}</span>
+          </button>
+          <ProgressLine routine={routine} todayKey={todayKey} />
+        </div>
+        <button
+          type="button"
+          className="btn-soft w-full"
+          onClick={() => {
+            if (!downloadTodoIcs(routine)) return
+            haptic(6)
+            toast(t('Calendar file saved'), '🗓️')
+          }}
+        >
+          <CalendarPlus size={16} /> {t('Add to phone calendar')}
+        </button>
+        <button type="button" className="btn-primary w-full" disabled={!title.trim()} onClick={save}>
+          {t('Save changes')}
+        </button>
+        <div className="flex justify-between">
+          <button
+            type="button"
+            className="text-sm font-bold text-ink-soft active:scale-95"
+            onClick={async () => {
+              // Stops repeating, so it becomes an ordinary wishlist item again.
+              await clearTodoRoutine(routine.id)
+              onClose()
+              toast(t('Moved to the wishlist'))
+            }}
+          >
+            {t('Stop repeating')}
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-sm font-bold text-coral-deep active:scale-95"
+            onClick={() => onRequestDelete(routine)}
+          >
+            <Trash2 size={15} /> {t('Delete')}
+          </button>
+        </div>
+      </div>
+      <RoutineSheet
+        open={rules}
+        onClose={() => setRules(false)}
+        value={routine.routine ?? null}
+        onSave={async (rule) => {
+          await setTodoRoutine(routine.id, rule)
+          onChange({ ...routine, routine: rule })
+          toast(t('Routine saved'), '🔁')
+          setRules(false)
+        }}
+      />
+    </>
+  )
+}
+
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <section className="mb-5">
@@ -327,26 +397,36 @@ function ProgressLine({ routine, todayKey }: { routine: Todo; todayKey: string }
  * One routine. With `onCheck` it is today's occurrence and the circle ticks it off; without, it is
  * a future one, so the slot shows the repeat mark instead of a control that would tick the wrong day.
  */
-function RoutineRow({
+const RoutineRow = memo(function RoutineRow({
   routine,
   couple,
   todayKey,
+  today = false,
   onCheck,
   onEdit,
 }: {
   routine: Todo
   couple: Couple
   todayKey: string
-  onCheck?: () => void
-  onEdit: () => void
+  /** today's occurrence, so the circle ticks it off rather than showing the repeat mark */
+  today?: boolean
+  onCheck?: (r: Todo) => void
+  onEdit: (r: Todo) => void
 }) {
   const t = useT()
   const locale = activeDateLocale()
   const rule = routine.routine
   const done = isOccurrenceDone(routine, todayKey)
-  const streak = routineStreak(routine, todayKey)
-  const progress = routineProgress(routine)
-  const next = rule ? nextOccurrenceKey(rule, todayKey) : null
+  // Each of these walks the tick log or the recurrence rule, so they are worth not repeating on a
+  // render that changed nothing about this row.
+  const { streak, progress, next } = useMemo(
+    () => ({
+      streak: routineStreak(routine, todayKey),
+      progress: routineProgress(routine),
+      next: rule ? nextOccurrenceKey(rule, todayKey) : null,
+    }),
+    [routine, todayKey, rule],
+  )
 
   return (
     <motion.div
@@ -357,10 +437,10 @@ function RoutineRow({
       transition={{ type: 'spring', stiffness: 480, damping: 36 }}
       className="row flex items-center gap-3 p-3"
     >
-      {onCheck ? (
+      {today && onCheck ? (
         <button
           type="button"
-          onClick={onCheck}
+          onClick={() => onCheck(routine)}
           aria-label={done ? t('Mark not done') : t('Mark done')}
           className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-white transition active:scale-90"
           style={
@@ -383,7 +463,7 @@ function RoutineRow({
         </span>
       )}
 
-      <button type="button" onClick={onEdit} className="min-w-0 flex-1 text-left active:opacity-70">
+      <button type="button" onClick={() => onEdit(routine)} className="min-w-0 flex-1 text-left active:opacity-70">
         <p className={`font-semibold leading-snug ${done ? 'text-ink-soft/60 line-through' : 'text-ink'}`}>
           {routine.title}
         </p>
@@ -391,7 +471,7 @@ function RoutineRow({
             finite one has got otherwise. Three facts crowd the line and truncate the rule. */}
         <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-soft">
           <span className="truncate">{rule ? routineSummary(rule, t) : ''}</span>
-          {!onCheck && next ? (
+          {!today && next ? (
             <span className="shrink-0">· {t('next {date}', { date: format(parseISO(next), 'EEE, MMM d', { locale }) })}</span>
           ) : progress.total ? (
             <span className="shrink-0">· {progress.done}/{progress.total}</span>
@@ -407,4 +487,4 @@ function RoutineRow({
       <Avatar name={partnerName(couple, routine.addedBy)} color={PARTNER_COLORS[routine.addedBy]} size={16} />
     </motion.div>
   )
-}
+})

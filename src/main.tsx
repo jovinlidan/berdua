@@ -2,17 +2,27 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 
-// Self-hosted fonts (offline-reliable for an installed PWA)
-import '@fontsource/fraunces/400.css'
-import '@fontsource/fraunces/500.css'
-import '@fontsource/fraunces/600.css'
-import '@fontsource/fraunces/700.css'
-import '@fontsource/nunito/400.css'
-import '@fontsource/nunito/600.css'
-import '@fontsource/nunito/700.css'
-import '@fontsource/nunito/800.css'
-import '@fontsource/caveat/400.css'
-import '@fontsource/caveat/700.css'
+// Self-hosted fonts (offline-reliable for an installed PWA).
+//
+// Imported per weight AND per subset, because the whole-family imports pull in cyrillic,
+// cyrillic-ext and vietnamese, which this app never renders, plus four weights it never uses. All
+// of it gets precached by the service worker, so it was paid for on install and again on every
+// deploy. The six faces below are the complete set the UI actually computes, checked against every
+// screen in the browser rather than by reading class names:
+//   Nunito 400/600/700 (body), Fraunces 400/600 (headings, and the pet rename inputs), Caveat 400.
+// latin-ext stays for accented names.
+import '@fontsource/fraunces/latin-400.css'
+import '@fontsource/fraunces/latin-ext-400.css'
+import '@fontsource/fraunces/latin-600.css'
+import '@fontsource/fraunces/latin-ext-600.css'
+import '@fontsource/nunito/latin-400.css'
+import '@fontsource/nunito/latin-ext-400.css'
+import '@fontsource/nunito/latin-600.css'
+import '@fontsource/nunito/latin-ext-600.css'
+import '@fontsource/nunito/latin-700.css'
+import '@fontsource/nunito/latin-ext-700.css'
+import '@fontsource/caveat/latin-400.css'
+import '@fontsource/caveat/latin-ext-400.css'
 
 import './index.css'
 import App from './App'
