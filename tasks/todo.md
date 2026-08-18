@@ -17,6 +17,8 @@ condensed after the main product phases shipped; durable lessons live in `tasks/
 - [x] Two-device pairing by private code with fixed member slots and reinstall-by-name recovery
 - [x] Dexie/IndexedDB repository with Upstash Redis sync, LWW merging, and tombstones
 - [x] Wishlist with custom groups, notes, reminders, swipe actions, search, and map locations
+- [x] Routines: daily/weekly/monthly repeat rules, per-occurrence check-offs, streaks, calendar
+      expansion, `.ics` RRULE export, and one push reminder per occurrence
 - [x] Calendar, bucket list, daily mood check-in, time capsules, and Thinking-of-you history
 - [x] Food map with MapLibre, OpenFreeMap tiles, Photon search, navigation links, and offline tile caching
 - [x] Shared pixel pets: up to three pets, care actions, growth, roaming, dragging, and habitat
@@ -53,6 +55,9 @@ Date Ideas and Memories were intentionally removed. Their old implementation not
 
 - Pairing supports two member slots; a third unrecognized device receives `couple_full`.
 - Partner-owned fields must use the field-union merge path to avoid concurrent overwrite.
+- Routine ticks (`Todo.routineLog`) merge per occurrence day, never whole-record last-write-wins.
+- A routine owns its own schedule; a routine record must not also carry `dueAt` (it would notify twice).
+- Routine occurrences are always derived within a bounded window, never materialised as one row per day.
 - Local tombstones must shadow stale server records so deleted items do not reappear.
 - Secret entries and secret photos must never be added to `SyncDoc`.
 - Photos are device-local unless a future blob-sync design explicitly changes that.
@@ -71,11 +76,14 @@ pnpm lint
 pnpm exec tsx scripts/test-pairing.ts
 pnpm exec tsx scripts/test-sync.ts
 pnpm exec tsx scripts/test-pet.ts
+pnpm exec tsx scripts/test-routine.ts
+node scripts/test-ics.mjs
 ```
 
 For affected user flows, also run the matching `scripts/test-*.mjs` Playwright scenario and inspect its
-screenshots and console output. Offline, pairing, sync, map, and destructive-reset changes require their
-dedicated regression scenarios.
+screenshots and console output. Offline, pairing, sync, map, routine, and destructive-reset changes
+require their dedicated regression scenarios (routines: `node scripts/test-routine-e2e.mjs`, which also
+proves both phones' per-day ticks survive the merge).
 
 ## References
 

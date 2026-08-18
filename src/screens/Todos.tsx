@@ -1,5 +1,5 @@
 import { AnimatePresence, type PanInfo, animate, motion, useMotionValue } from 'framer-motion'
-import { AlignLeft, ArrowDown, ArrowUp, CalendarClock, Check, ChevronDown, Lock, MapPin, Navigation, Pencil, Plus, Search, Tag, Trash2, X } from 'lucide-react'
+import { AlignLeft, ArrowDown, ArrowUp, CalendarClock, CalendarPlus, Check, ChevronDown, Flame, Lock, MapPin, Navigation, Pencil, Plus, Repeat, Search, Tag, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
@@ -9,16 +9,24 @@ import { Chip } from '../components/Chip'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 import { PlaceSearchSheet } from '../components/PlaceSearchSheet'
+import { RoutineSheet } from '../components/RoutineSheet'
 import { useToast } from '../components/Toast'
 import { useCouple, useTodoGroups, useTodos } from '../db/hooks'
-import { addTodo, addTodoGroup, clearTodoPlace, deleteTodo, deleteTodoGroup, moveTodoGroup, toggleTodo, updateTodo, updateTodoGroup } from '../db/repo'
-import { whenLabel } from '../lib/dates'
+import { addTodo, addTodoGroup, clearTodoPlace, clearTodoRoutine, deleteTodo, deleteTodoGroup, moveTodoGroup, setTodoRoutine, toggleTodo, updateTodo, updateTodoGroup } from '../db/repo'
+import { todayIso, whenLabel } from '../lib/dates'
 import { haptic } from '../lib/haptics'
 import { useT } from '../lib/i18n'
 import { openNavigation } from '../lib/navlinks'
 import { PARTNER_COLORS, partnerName } from '../lib/partners'
+import {
+  isTodoDoneNow,
+  routineProgress,
+  routineStreak,
+  routineSummary,
+} from '../lib/recurrence'
+import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
-import type { Couple, Todo, TodoGroup } from '../types'
+import type { Couple, Routine, Todo, TodoGroup } from '../types'
 
 const FIELD =
   'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
@@ -56,10 +64,18 @@ export default function Todos() {
   const [pendingDelete, setPendingDelete] = useState<Todo | null>(null)
   // attaching/changing the place on a wishlist item (opens the shared place-search sheet)
   const [placeTodo, setPlaceTodo] = useState<Todo | null>(null)
+  // the repeat rule being composed for a brand-new task (before it exists in the db)
+  const [newRoutine, setNewRoutine] = useState<Routine | null>(null)
+  // which sheet the routine editor is serving: the quick-add draft, or the to-do being edited
+  const [routineFor, setRoutineFor] = useState<'new' | 'edit' | null>(null)
 
-  // celebrate finishing everything (fires once when hitting 100%)
+  // A routine is never "done" as a whole, so progress reads its CURRENT occurrence instead. A day
+  // with every routine ticked then still counts as finished (and still earns the confetti).
+  const todayKey = todayIso()
   const allTodos = todos ?? []
-  const donePct = allTodos.length ? Math.round((allTodos.filter((t) => t.done).length / allTodos.length) * 100) : 0
+  const donePct = allTodos.length
+    ? Math.round((allTodos.filter((t) => isTodoDoneNow(t, todayKey)).length / allTodos.length) * 100)
+    : 0
   const celebrated = useRef(false)
   useEffect(() => {
     if (allTodos.length > 0 && donePct === 100 && !celebrated.current) {
@@ -73,13 +89,14 @@ export default function Todos() {
 
   const groupList = groups ?? []
   const list = todos ?? []
-  const done = list.filter((t) => t.done)
+  const done = list.filter((t) => isTodoDoneNow(t, todayKey))
   const total = list.length
   const target = addCat ?? groupList[0]?.id ?? 'other'
   const groupIds = new Set(groupList.map((g) => g.id))
   // Completed tasks stay inside their own category (just sorted to the bottom, struck through) —
   // they are NOT moved to a separate "Done" section.
-  const sortDoneLast = (arr: Todo[]) => [...arr].sort((a, b) => Number(a.done) - Number(b.done))
+  const sortDoneLast = (arr: Todo[]) =>
+    [...arr].sort((a, b) => Number(isTodoDoneNow(a, todayKey)) - Number(isTodoDoneNow(b, todayKey)))
   const ungrouped = sortDoneLast(list.filter((t) => !groupIds.has(t.category)))
 
   async function add() {
@@ -91,15 +108,24 @@ export default function Todos() {
       category: target,
       addedBy: activePartner,
       dueAt: showDue && due ? new Date(due).getTime() : undefined,
+      routine: newRoutine ?? undefined,
     })
     setTitle('')
     setNote('')
     setShowNote(false)
     setDue('')
     setShowDue(false)
+    setNewRoutine(null)
     haptic(8)
     const label = groupList.find((g) => g.id === target)?.label ?? t('list')
-    toast(t('Added to {cat}', { cat: label }))
+    toast(newRoutine ? t('Routine added to {cat}', { cat: label }) : t('Added to {cat}', { cat: label }))
+  }
+
+  /** Export a wishlist item to the phone's own calendar app (a routine goes as one RRULE event). */
+  function addToPhoneCalendar(todo: Todo) {
+    if (!downloadTodoIcs(todo)) return
+    haptic(6)
+    toast(t('Calendar file saved'), '🗓️')
   }
 
   function openEdit(t: Todo) {
@@ -195,10 +221,20 @@ export default function Todos() {
           </button>
           <button
             type="button"
-            onClick={() => setShowDue((v) => !v)}
+            onClick={() => {
+              setShowDue((v) => !v)
+              setNewRoutine(null) // a one-off reminder and a repeat rule are mutually exclusive
+            }}
             className={`chip ${showDue ? 'bg-coral/15 text-coral-deep' : 'bg-cream-deep text-ink-soft'}`}
           >
             <CalendarClock size={14} /> {showDue ? t('Reminder on') : t('Add a reminder')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setRoutineFor('new')}
+            className={`chip ${newRoutine ? 'bg-coral/15 text-coral-deep' : 'bg-cream-deep text-ink-soft'}`}
+          >
+            <Repeat size={14} /> {newRoutine ? routineSummary(newRoutine, t) : t('Repeat it')}
           </button>
         </div>
         <AnimatePresence>
@@ -281,6 +317,7 @@ export default function Todos() {
                 group={g}
                 todos={groupTodos}
                 couple={couple}
+                todayKey={todayKey}
                 collapsed={collapsedTodoGroups.includes(g.id)}
                 onToggle={() => toggleTodoGroupCollapsed(g.id)}
                 onEditTodo={openEdit}
@@ -298,6 +335,7 @@ export default function Todos() {
               group={{ id: '_ungrouped', label: t('Uncategorised'), emoji: '📦', tint: '#9CA77F', order: 999, createdAt: 0, updatedAt: 0 }}
               todos={ungrouped}
               couple={couple}
+              todayKey={todayKey}
               collapsed={collapsedTodoGroups.includes('_ungrouped')}
               onToggle={() => toggleTodoGroupCollapsed('_ungrouped')}
               onEditTodo={openEdit}
@@ -402,27 +440,62 @@ export default function Todos() {
                 onChange={(e) => setEtNote(e.target.value)}
               />
             </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Reminder (optional)')}</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="datetime-local"
-                  className={FIELD}
-                  value={etDue}
-                  onChange={(e) => setEtDue(e.target.value)}
-                />
-                {etDue && (
-                  <button
-                    type="button"
-                    onClick={() => setEtDue('')}
-                    aria-label={t('Clear reminder')}
-                    className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cream-deep text-ink-soft transition active:scale-90"
-                  >
-                    <X size={18} />
-                  </button>
-                )}
+            {/* A routine carries its own schedule, so it replaces the one-off reminder field. */}
+            {!editTodo.routine && (
+              <div>
+                <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Reminder (optional)')}</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    className={FIELD}
+                    value={etDue}
+                    onChange={(e) => setEtDue(e.target.value)}
+                  />
+                  {etDue && (
+                    <button
+                      type="button"
+                      onClick={() => setEtDue('')}
+                      aria-label={t('Clear reminder')}
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cream-deep text-ink-soft transition active:scale-90"
+                    >
+                      <X size={18} />
+                    </button>
+                  )}
+                </div>
               </div>
+            )}
+
+            <div>
+              <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Repeats')}</label>
+              {editTodo.routine ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 rounded-2xl bg-coral/10 px-3 py-2.5 ring-1 ring-coral/20">
+                    <Repeat size={16} className="shrink-0 text-coral" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                      {routineSummary(editTodo.routine, t)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setRoutineFor('edit')}
+                      className="text-xs font-bold text-coral-deep active:opacity-70"
+                    >
+                      {t('Change')}
+                    </button>
+                  </div>
+                  <RoutineProgressLine todo={editTodo} todayKey={todayKey} />
+                </div>
+              ) : (
+                <button type="button" className="btn-soft w-full" onClick={() => setRoutineFor('edit')}>
+                  <Repeat size={16} /> {t('Make it a routine')}
+                </button>
+              )}
             </div>
+
+            {(editTodo.routine || editTodo.dueAt) && (
+              <button type="button" className="btn-soft w-full" onClick={() => addToPhoneCalendar(editTodo)}>
+                <CalendarPlus size={16} /> {t('Add to phone calendar')}
+              </button>
+            )}
             <div>
               <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Place (optional)')}</label>
               {editTodo.place ? (
@@ -461,6 +534,41 @@ export default function Todos() {
       {/* attach / change a wishlist item's place (shared with the Map screen) */}
       <PlaceSearchSheet open={!!placeTodo} onClose={() => setPlaceTodo(null)} todo={placeTodo ?? undefined} />
 
+      {/* repeat editor, shared by the quick-add draft and the to-do being edited */}
+      <RoutineSheet
+        open={routineFor !== null}
+        onClose={() => setRoutineFor(null)}
+        value={routineFor === 'edit' ? editTodo?.routine ?? null : newRoutine}
+        onSave={async (routine) => {
+          if (routineFor === 'edit' && editTodo) {
+            await setTodoRoutine(editTodo.id, routine)
+            setEditTodo({ ...editTodo, routine, dueAt: undefined })
+            setEtDue('')
+            toast(t('Routine saved'), '🔁')
+          } else {
+            setNewRoutine(routine)
+            setShowDue(false) // the routine's own time replaces a one-off reminder
+            setDue('')
+          }
+          setRoutineFor(null)
+        }}
+        onRemove={
+          routineFor === 'edit' && editTodo?.routine
+            ? async () => {
+                await clearTodoRoutine(editTodo.id)
+                setEditTodo({ ...editTodo, routine: undefined })
+                setRoutineFor(null)
+                toast(t('Stopped repeating'))
+              }
+            : routineFor === 'new' && newRoutine
+              ? () => {
+                  setNewRoutine(null)
+                  setRoutineFor(null)
+                }
+              : undefined
+        }
+      />
+
       {/* delete confirmation */}
       <BottomSheet open={!!pendingDelete} onClose={() => setPendingDelete(null)} title={t('Delete this task?')}>
         {pendingDelete && (
@@ -493,10 +601,24 @@ export default function Todos() {
   )
 }
 
+/** Progress + streak read-back for a routine (used in the edit sheet). */
+function RoutineProgressLine({ todo, todayKey }: { todo: Todo; todayKey: string }) {
+  const t = useT()
+  const { done, total } = routineProgress(todo)
+  const streak = routineStreak(todo, todayKey)
+  return (
+    <p className="px-1 text-xs text-ink-soft">
+      {total === null ? t('{done} done so far', { done }) : t('{done} of {total} done', { done, total })}
+      {streak >= 2 && ` · ${t('{n} in a row 🔥', { n: streak })}`}
+    </p>
+  )
+}
+
 function GroupSection({
   group,
   todos,
   couple,
+  todayKey,
   collapsed,
   onToggle,
   onEdit,
@@ -506,6 +628,7 @@ function GroupSection({
   group: TodoGroup
   todos: Todo[]
   couple: Couple
+  todayKey: string
   collapsed: boolean
   onToggle: () => void
   onEdit?: () => void
@@ -513,7 +636,7 @@ function GroupSection({
   onRequestDelete: (t: Todo) => void
 }) {
   const tr = useT()
-  const openCount = todos.filter((t) => !t.done).length
+  const openCount = todos.filter((t) => !isTodoDoneNow(t, todayKey)).length
   return (
     <motion.div layout transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="mb-3">
       <div className="flex items-center gap-1">
@@ -566,6 +689,7 @@ function GroupSection({
                     todo={t}
                     tint={group.tint}
                     couple={couple}
+                    todayKey={todayKey}
                     onEdit={() => onEditTodo(t)}
                     onRequestDelete={() => onRequestDelete(t)}
                   />
@@ -585,20 +709,31 @@ function TodoRow({
   todo,
   tint,
   couple,
+  todayKey,
   onEdit,
   onRequestDelete,
 }: {
   todo: Todo
   tint: string
   couple: Couple
+  todayKey: string
   onEdit: () => void
   onRequestDelete: () => void
 }) {
   const t = useT()
+  const activePartner = useSession((s) => s.activePartner)
   const x = useMotionValue(0)
   const [open, setOpen] = useState<'none' | 'done' | 'delete'>('none')
   // True briefly around a drag so the click that fires on release doesn't toggle/edit the row.
   const dragged = useRef(false)
+  // For a routine, "done" means the occurrence it's standing on today; the activity itself lives on.
+  const doneNow = isTodoDoneNow(todo, todayKey)
+  const streak = todo.routine ? routineStreak(todo, todayKey) : 0
+  const progress = todo.routine ? routineProgress(todo) : null
+  const check = () => {
+    haptic(doneNow ? 4 : [8, 20])
+    void toggleTodo(todo.id, activePartner)
+  }
 
   const settle = (to: number) => animate(x, to, { type: 'spring', stiffness: 500, damping: 42 })
   const close = () => {
@@ -637,13 +772,12 @@ function TodoRow({
         <button
           type="button"
           onClick={() => {
-            haptic(todo.done ? 4 : [8, 20])
-            void toggleTodo(todo.id)
+            check()
             close()
           }}
           className="flex w-[84px] flex-col items-center justify-center gap-0.5 bg-sage text-xs font-bold text-white"
         >
-          <Check size={18} strokeWidth={3} /> {todo.done ? t('Undo') : t('Done')}
+          <Check size={18} strokeWidth={3} /> {doneNow ? t('Undo') : t('Done')}
         </button>
         <button
           type="button"
@@ -680,19 +814,18 @@ function TodoRow({
               close() // an open row: any tap on the card just closes it
               return
             }
-            haptic(todo.done ? 4 : [8, 20])
-            void toggleTodo(todo.id)
+            check()
           }}
-          aria-label={todo.done ? t('Mark not done') : t('Mark done')}
+          aria-label={doneNow ? t('Mark not done') : t('Mark done')}
           className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-white transition active:scale-90"
           style={
-            todo.done
+            doneNow
               ? { backgroundColor: '#7C8A6F', boxShadow: 'inset 0 0 0 2px #7C8A6F' }
               : { backgroundColor: `${tint}26`, boxShadow: `inset 0 0 0 2px ${tint}` }
           }
         >
           <AnimatePresence>
-            {todo.done && (
+            {doneNow && (
               <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
                 <Check size={14} strokeWidth={3} />
               </motion.span>
@@ -709,18 +842,35 @@ function TodoRow({
           className="min-w-0 flex-1 text-left active:opacity-70"
           aria-label={t('Edit to-do')}
         >
-          <p className={`text-sm font-semibold leading-snug transition ${todo.done ? 'text-ink-soft/60 line-through' : 'text-ink'}`}>
+          <p className={`text-sm font-semibold leading-snug transition ${doneNow ? 'text-ink-soft/60 line-through' : 'text-ink'}`}>
             {todo.title}
           </p>
           {todo.note && (
-            <p className={`line-clamp-1 text-xs ${todo.done ? 'text-ink-soft/50' : 'text-ink-soft'}`}>{todo.note}</p>
+            <p className={`line-clamp-1 text-xs ${doneNow ? 'text-ink-soft/50' : 'text-ink-soft'}`}>{todo.note}</p>
           )}
           {todo.place && (
-            <span className={`mt-0.5 flex items-center gap-1 text-[11px] font-semibold ${todo.done ? 'text-ink-soft/50' : 'text-coral'}`}>
+            <span className={`mt-0.5 flex items-center gap-1 text-[11px] font-semibold ${doneNow ? 'text-ink-soft/50' : 'text-coral'}`}>
               <MapPin size={11} /> {todo.place.name}
             </span>
           )}
-          {todo.dueAt && !todo.done && (
+          {todo.routine && (
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] font-semibold text-sage">
+              <span className="flex items-center gap-1">
+                <Repeat size={11} /> {routineSummary(todo.routine, t)}
+              </span>
+              {progress?.total ? (
+                <span className="text-ink-soft">
+                  · {t('{done}/{total}', { done: progress.done, total: progress.total })}
+                </span>
+              ) : null}
+              {streak >= 2 && (
+                <span className="flex items-center gap-0.5 text-coral-deep">
+                  <Flame size={11} /> {streak}
+                </span>
+              )}
+            </span>
+          )}
+          {todo.dueAt && !todo.routine && !todo.done && (
             <span className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-coral-deep">
               <CalendarClock size={11} /> {whenLabel(todo.dueAt)}
             </span>

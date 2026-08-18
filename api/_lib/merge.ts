@@ -1,3 +1,4 @@
+import { mergeRoutineLogs } from '../../src/lib/recurrence.js'
 import type {
   BucketItem,
   Couple,
@@ -47,6 +48,19 @@ function mergeTombstones(a: Tombstone[], b: Tombstone[], nowMs: number): Tombsto
   return [...map.values()].filter((t) => nowMs - t.deletedAt < TOMBSTONE_TTL)
 }
 
+/** Drop rows shadowed by a tombstone at least as new as the row itself. */
+function dropDeleted<T extends { id: string; updatedAt: number }>(
+  rows: T[],
+  tombstones: Tombstone[],
+  table: SyncTable,
+): T[] {
+  const deletedAt = new Map(tombstones.filter((t) => t.table === table).map((t) => [t.id, t.deletedAt]))
+  return rows.filter((r) => {
+    const d = deletedAt.get(r.id)
+    return d === undefined || r.updatedAt > d
+  })
+}
+
 /** Last-write-wins by id; drop rows shadowed by a newer tombstone. */
 function mergeCollection<T extends { id: string; updatedAt: number }>(
   a: T[],
@@ -59,11 +73,27 @@ function mergeCollection<T extends { id: string; updatedAt: number }>(
     const existing = map.get(r.id)
     if (!existing || r.updatedAt > existing.updatedAt) map.set(r.id, r)
   }
-  const deletedAt = new Map(tombstones.filter((t) => t.table === table).map((t) => [t.id, t.deletedAt]))
-  return [...map.values()].filter((r) => {
-    const d = deletedAt.get(r.id)
-    return d === undefined || r.updatedAt > d
-  })
+  return dropDeleted([...map.values()], tombstones, table)
+}
+
+/**
+ * To-dos merge LWW like any other collection, except a routine's `routineLog`, which is unioned per
+ * occurrence day. Whole-record LWW would silently drop one partner's tick whenever both phones
+ * checked off DIFFERENT days of the same routine while offline.
+ */
+function mergeTodos(a: Todo[], b: Todo[], tombstones: Tombstone[]): Todo[] {
+  const map = new Map<string, Todo>()
+  for (const r of [...a, ...b]) {
+    const existing = map.get(r.id)
+    if (!existing) {
+      map.set(r.id, r)
+      continue
+    }
+    const newest = r.updatedAt > existing.updatedAt ? r : existing
+    const routineLog = mergeRoutineLogs(existing.routineLog, r.routineLog)
+    map.set(r.id, routineLog ? { ...newest, routineLog } : newest)
+  }
+  return dropDeleted([...map.values()], tombstones, 'todos')
 }
 
 /** Like mergeCollection but unions partner-owned fields (daily records). */
@@ -125,7 +155,7 @@ export function mergeDocs(stored: SyncDoc, incoming: SyncSnapshot, nowMs: number
         : stored.notifPrefs,
     notifPrefsUpdatedAt: Math.max(stored.notifPrefsUpdatedAt, incoming.notifPrefsUpdatedAt ?? 0),
     bucketItems: mergeCollection<BucketItem>(stored.bucketItems, incoming.bucketItems ?? [], tombstones, 'bucketItems'),
-    todos: mergeCollection<Todo>(stored.todos, incoming.todos ?? [], tombstones, 'todos'),
+    todos: mergeTodos(stored.todos, incoming.todos ?? [], tombstones),
     todoGroups: mergeCollection<TodoGroup>(stored.todoGroups ?? [], incoming.todoGroups ?? [], tombstones, 'todoGroups'),
     sealedNotes: mergeCollection<SealedNote>(stored.sealedNotes, incoming.sealedNotes ?? [], tombstones, 'sealedNotes'),
     thinkingPings: mergeCollection<ThinkingPing>(
