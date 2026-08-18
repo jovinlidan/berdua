@@ -26,8 +26,6 @@ import { useSession } from '../store/useSession'
 
 const ERASE_COOLDOWN_S = 5 // a deliberate pause so erasing everything can't be a reflex tap
 
-const FIELD =
-  'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
 
 export default function Settings() {
   const couple = useCouple()
@@ -138,7 +136,7 @@ export default function Settings() {
         />
         <div className="mt-3">
           <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Partner')}</label>
-          <div className={`${FIELD} flex items-center`}>
+          <div className="field flex items-center">
             {partnerName ? (
               <span className="text-ink">{partnerName}</span>
             ) : (
@@ -150,14 +148,14 @@ export default function Settings() {
           <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Anniversary')}</label>
           <input
             type="date"
-            className={FIELD}
+            className="field"
             defaultValue={couple.anniversaryDate ?? ''}
             onChange={(e) => updateCouple({ anniversaryDate: e.target.value || null })}
           />
         </div>
         <div className="mt-3">
           <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Your couple code')}</label>
-          <div className={`${FIELD} flex items-center justify-between gap-2`}>
+          <div className="field flex items-center justify-between gap-2">
             <span className="font-bold text-ink">{couple.coupleSpaceCode}</span>
             <span className="text-xs text-ink-soft/70">{t('shared with your partner')}</span>
           </div>
@@ -434,7 +432,7 @@ export default function Settings() {
               {t('Type')} <span className="font-mono text-coral-deep">CONFIRM</span> {t('to continue')}
             </label>
             <input
-              className={FIELD}
+              className="field"
               placeholder="CONFIRM"
               value={eraseText}
               autoCapitalize="characters"
@@ -493,7 +491,7 @@ function LabeledInput({
     <div>
       {label && <label className="mb-1.5 block text-sm font-bold text-ink-soft">{label}</label>}
       <input
-        className={FIELD}
+        className="field"
         defaultValue={defaultValue}
         placeholder={placeholder}
         onBlur={(e) => onSave(e.target.value.trim())}

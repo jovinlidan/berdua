@@ -81,9 +81,8 @@ export default function Bucket() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, x: -40, transition: { duration: 0.18 } }}
                 transition={{ type: 'spring', stiffness: 480, damping: 36 }}
-                className="card relative flex items-center gap-3 overflow-hidden p-4 pl-4"
+                className="card relative flex items-center gap-3 overflow-hidden p-4"
               >
-                <span className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: wl.tint }} />
                 <button
                   type="button"
                   onClick={() => complete(item)}

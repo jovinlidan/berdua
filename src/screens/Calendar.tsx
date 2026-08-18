@@ -31,10 +31,10 @@ import type { PartnerKey } from '../types'
 // Labels are translated at render via t(); colors/emoji stay as-is. A routine carries no emoji:
 // its row is interactive, so the slot holds a real check control instead (see RoutineRow).
 const META: Record<CalendarEventType | 'anniversary', { emoji?: string; color: string; label: string }> = {
-  todo: { emoji: '☑️', color: '#7C8A6F', label: 'Wishlist' },
-  routine: { color: '#D98C5F', label: 'Routine' },
-  capsule: { emoji: '💌', color: '#9D8EC9', label: 'Capsule' },
-  anniversary: { emoji: '❤️', color: '#E07A9B', label: 'Anniversary' },
+  todo: { emoji: '☑️', color: '#6E7D62', label: 'Wishlist' },
+  routine: { color: '#B4703F', label: 'Routine' },
+  capsule: { emoji: '💌', color: '#7E6BB0', label: 'Capsule' },
+  anniversary: { emoji: '❤️', color: '#C25876', label: 'Anniversary' },
 }
 const dayKey = (d: Date | number) => format(d, 'yyyy-MM-dd')
 
@@ -179,7 +179,7 @@ export default function Calendar() {
                   <span
                     className={`grid h-9 w-9 place-items-center rounded-full text-sm font-semibold transition ${
                       selectedDay
-                        ? 'bg-coral text-white'
+                        ? 'bg-coral-deep text-white'
                         : today
                           ? 'text-coral ring-2 ring-coral/40'
                           : inMonth
@@ -222,7 +222,7 @@ export default function Calendar() {
             className="space-y-2.5"
           >
             {selectedAnniv !== null && (
-              <div className="card flex items-center gap-3 p-3.5" style={{ boxShadow: `inset 4px 0 0 ${META.anniversary.color}` }}>
+              <div className="card flex items-center gap-3 p-3.5">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-xl" style={{ backgroundColor: `${META.anniversary.color}22` }}>
                   {META.anniversary.emoji}
                 </span>
@@ -252,7 +252,6 @@ export default function Calendar() {
                   type="button"
                   onClick={() => navigate(e.route)}
                   className="card flex w-full items-center gap-3 p-3.5 text-left transition active:scale-[0.99]"
-                  style={{ boxShadow: `inset 4px 0 0 ${META[e.type].color}` }}
                 >
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-xl" style={{ backgroundColor: `${META[e.type].color}22` }}>
                     {META[e.type].emoji}
@@ -306,7 +305,6 @@ function RoutineRow({
   return (
     <div
       className="card flex w-full items-center gap-3 p-3.5"
-      style={{ boxShadow: `inset 4px 0 0 ${META.routine.color}` }}
     >
       {/* The same check the wishlist row uses, so "tap to tick this day off" needs no explaining. */}
       <button

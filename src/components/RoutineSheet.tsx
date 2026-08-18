@@ -22,8 +22,6 @@ import type { Routine, RoutineFreq } from '../types'
 import { BottomSheet } from './BottomSheet'
 import { Chip } from './Chip'
 
-const FIELD =
-  'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
 
 const UNIT_LABELS: Record<RoutineFreq, [one: string, many: string]> = {
   daily: ['day', 'days'],
@@ -164,7 +162,7 @@ export function RoutineSheet({
                     aria-pressed={on}
                     aria-label={t(key)}
                     className={`h-11 flex-1 rounded-xl text-[11px] font-bold transition active:scale-90 ${
-                      on ? 'bg-coral text-white' : 'bg-cream-deep text-ink-soft'
+                      on ? 'bg-coral-deep text-white' : 'bg-cream-deep text-ink-soft'
                     }`}
                   >
                     {t(key)}
@@ -179,11 +177,11 @@ export function RoutineSheet({
         <div className="flex gap-3">
           <div className="min-w-0 flex-1">
             <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Starts')}</label>
-            <input type="date" className={FIELD} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <input type="date" className="field" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
           <div className="min-w-0 flex-1">
             <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Time (optional)')}</label>
-            <input type="time" className={FIELD} value={time} onChange={(e) => setTime(e.target.value)} />
+            <input type="time" className="field" value={time} onChange={(e) => setTime(e.target.value)} />
           </div>
         </div>
 
@@ -207,7 +205,7 @@ export function RoutineSheet({
           {endMode === 'on' && (
             <input
               type="date"
-              className={`${FIELD} mt-2`}
+              className="field mt-2"
               value={until}
               min={startDate}
               onChange={(e) => setUntil(e.target.value)}
@@ -219,7 +217,7 @@ export function RoutineSheet({
                 type="number"
                 min={1}
                 max={MAX_OCCURRENCES}
-                className={FIELD}
+                className="field"
                 value={count}
                 onChange={(e) => setCount(Math.max(1, Math.min(MAX_OCCURRENCES, Number(e.target.value) || 1)))}
               />

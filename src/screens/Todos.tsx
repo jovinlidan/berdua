@@ -29,8 +29,6 @@ import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
 import type { Couple, Routine, Todo, TodoGroup } from '../types'
 
-const FIELD =
-  'w-full rounded-2xl bg-cream-deep px-4 py-3 text-ink placeholder:text-ink-soft/60 outline-none ring-1 ring-transparent focus:ring-coral/40'
 
 /** epoch ms → a value the <input type="datetime-local"> understands (local time, no seconds). */
 function toLocalInput(ms?: number): string {
@@ -179,7 +177,7 @@ export default function Todos() {
   }
 
   return (
-    <div className="pt-[calc(0.4rem+env(safe-area-inset-top))]">
+    <div data-surface="list" className="pt-[calc(0.4rem+env(safe-area-inset-top))]">
       <PageHeader
         title={t('Wishlist, together')}
         subtitle={total ? t('{n} of {total} done', { n: done.length, total }) : t('add your first task below')}
@@ -196,7 +194,7 @@ export default function Todos() {
       <div className="card mb-3 p-3">
         <div className="flex items-center gap-2">
           <input
-            className={FIELD}
+            className="field"
             placeholder={t('Add a task…')}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -289,7 +287,7 @@ export default function Todos() {
           >
             <div className="card mb-5 flex items-center gap-2 p-3">
               <input
-                className={FIELD}
+                className="field"
                 placeholder={t('New category name…')}
                 value={newCat}
                 onChange={(e) => setNewCat(e.target.value)}
@@ -362,7 +360,7 @@ export default function Todos() {
                 value={editLabel}
                 onChange={(e) => setEditLabel(e.target.value)}
                 placeholder={t('Category name')}
-                className={FIELD}
+                className="field"
               />
             </div>
             <div className="flex gap-3">
@@ -423,7 +421,7 @@ export default function Todos() {
             <div>
               <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Task')}</label>
               <input
-                className={FIELD}
+                className="field"
                 placeholder={t('What needs doing?')}
                 value={etTitle}
                 onChange={(e) => setEtTitle(e.target.value)}
@@ -446,7 +444,7 @@ export default function Todos() {
                 <div className="flex items-center gap-2">
                   <input
                     type="datetime-local"
-                    className={FIELD}
+                    className="field"
                     value={etDue}
                     onChange={(e) => setEtDue(e.target.value)}
                   />
@@ -767,7 +765,7 @@ function TodoRow({
       className="relative"
     >
       {/* Latched swipe actions behind the card — tap to act (no auto-fire). */}
-      <div className="absolute inset-0 flex items-stretch justify-between overflow-hidden rounded-xl">
+      <div className="absolute inset-0 flex items-stretch justify-between overflow-hidden rounded-[var(--radius-row)]">
         <button
           type="button"
           onClick={() => {
@@ -801,9 +799,8 @@ function TodoRow({
         onDragStart={() => (dragged.current = true)}
         onDragEnd={onDragEnd}
         style={{ x, touchAction: 'pan-y' }}
-        className="card relative flex items-center gap-2.5 overflow-hidden !rounded-xl p-2.5 pl-3 shadow-[0_1px_2px_rgba(58,46,43,0.06)] ring-ink/[0.06]"
+        className="row relative flex items-center gap-2.5 overflow-hidden p-3"
       >
-        <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: tint }} />
         {/* Check: bold tinted ring + soft tint fill (clearly tappable) → solid sage + white check when done */}
         <button
           type="button"

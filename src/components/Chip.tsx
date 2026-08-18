@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { textOn } from '../lib/contrast'
 
 export function Chip({
   active = false,
@@ -15,8 +16,8 @@ export function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={`chip shrink-0 whitespace-nowrap active:scale-95 ${active ? 'text-white shadow-sm' : 'bg-cream-deep text-ink ring-1 ring-ink/5'}`}
-      style={active ? { backgroundColor: color ?? 'var(--color-coral)' } : undefined}
+      className={`chip shrink-0 whitespace-nowrap active:scale-95 ${active ? 'shadow-sm' : 'bg-cream-deep text-ink ring-1 ring-ink/5'}`}
+      style={active ? { backgroundColor: color ?? '#c86a51', color: textOn(color ?? '#c86a51') } : undefined}
       aria-pressed={active}
     >
       {children}
