@@ -224,6 +224,28 @@ input[type='datetime-local']::-webkit-date-and-time-value {
 }
 
 /* respect users who prefer less motion */
+/* The floating page header. Transform and opacity only, so it composites like the sheet does and
+   costs nothing to run while the page is scrolling. */
+.page-topbar {
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
+  transition:
+    opacity 160ms ease-out,
+    transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: opacity, transform;
+}
+.page-topbar.is-floating {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-topbar {
+    transition-duration: 0.01ms;
+  }
+}
+
 /* The bottom sheet's slide. Compositor-driven on purpose: these are transform and opacity only,
    so the animation keeps the display's refresh rate (120Hz where the screen offers it) instead of
    being stepped once per requestAnimationFrame by JavaScript on the main thread. Durations here are
