@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Send, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
@@ -25,6 +25,25 @@ export default function Thinking() {
   const toast = useToast()
   const [custom, setCustom] = useState('')
   const [sending, setSending] = useState(false)
+
+  // Read as a conversation: oldest at the top, newest just above the composer, the way every
+  // messaging app does it. The store hands them over newest-first because ThinkingOfYou takes the
+  // latest one straight off the front for its teaser and unread dot, so the flip belongs here
+  // rather than in the query.
+  const thread = useMemo(() => [...(pings ?? [])].reverse(), [pings])
+
+  // With the newest at the bottom, the screen has to open there, or you land on the oldest ping and
+  // scroll past your whole history to reach what just arrived.
+  const jumped = useRef(false)
+  useEffect(() => {
+    if (!thread.length) return
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      // no animation for the first landing; a new ping afterwards is worth following
+      behavior: jumped.current ? 'smooth' : 'auto',
+    })
+    jumped.current = true
+  }, [thread.length])
 
   // Newest received ping → mark the thread as seen (clears the Home unread dot).
   const newestReceived = useMemo(
@@ -83,7 +102,7 @@ export default function Thinking() {
       ) : (
         <ul className="mt-2 space-y-3">
           <AnimatePresence initial={false}>
-            {pings.map((p) => {
+            {thread.map((p) => {
               const mine = p.fromPartner === activePartner
               const who = mine ? t('You') : partnerName(couple, p.fromPartner)
               return (
