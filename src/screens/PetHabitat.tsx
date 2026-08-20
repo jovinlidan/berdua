@@ -12,6 +12,7 @@ import { usePets } from '../db/hooks'
 import { carePet, releasePet, renamePet } from '../db/repo'
 import { formatDay } from '../lib/dates'
 import { haptic } from '../lib/haptics'
+import { dropToGround } from '../lib/petMotion'
 import { useT } from '../lib/i18n'
 import {
   MAX_PETS,
@@ -124,6 +125,7 @@ function SceneWalker({
   const [walking, setWalking] = useState(false)
   const [held, setHeld] = useState(false)
   const ctrl = useRef<AnimationPlaybackControls | null>(null)
+  const drop = useRef<AnimationPlaybackControls | undefined>(undefined)
   const pause = useRef<number | undefined>(undefined)
   const mood = moodOf(pet, now)
   const stage = stageOf(pet, now)
@@ -178,11 +180,16 @@ function SceneWalker({
       dragMomentum={false}
       onDragStart={() => {
         ctrl.current?.stop()
+        drop.current?.stop() // grabbed again mid-fall
         setWalking(false)
         setHeld(true)
         haptic(6)
       }}
-      onDragEnd={() => setHeld(false)}
+      onDragEnd={() => {
+        setHeld(false)
+        // same as the roaming pet: keep where it was put horizontally, but come back to the ground
+        drop.current = dropToGround(y)
+      }}
       whileDrag={{ scale: 1.12, zIndex: 10 }}
     >
       {bubble && !held && <span className="absolute -top-6 text-sm">{bubble}</span>}

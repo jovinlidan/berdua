@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { usePets } from '../db/hooks'
 import { carePet, renamePet } from '../db/repo'
 import { haptic } from '../lib/haptics'
+import { dropToGround } from '../lib/petMotion'
 import { useT } from '../lib/i18n'
 import { type PetAction, STAGE_LABEL, moodOf, settleStats, stageOf } from '../lib/pet'
 import { useOverlay } from '../store/useOverlay'
@@ -85,6 +86,7 @@ function RoamingPet({ pet, now, index, onTap }: { pet: Pet; now: number; index: 
   const [held, setHeld] = useState(false)
   const [bounds, setBounds] = useState({ maxX: 0, maxY: 0 })
   const walkCtrl = useRef<AnimationPlaybackControls | null>(null)
+  const dropCtrl = useRef<AnimationPlaybackControls | undefined>(undefined)
   const pauseRef = useRef<number | undefined>(undefined)
   // True from the moment a drag begins until just after it ends. framer-motion still fires onTap on
   // the pointer-up that ENDS a drag, so without this, putting the pet down opened its care sheet
@@ -165,12 +167,15 @@ function RoamingPet({ pet, now, index, onTap }: { pet: Pet; now: number; index: 
         onDragStart={() => {
           dragged.current = true
           walkCtrl.current?.stop()
+          dropCtrl.current?.stop() // grabbed again mid-fall
           setWalking(false)
           setHeld(true)
           haptic(6)
         }}
         onDragEnd={() => {
           setHeld(false)
+          // wherever it was let go, it belongs on the ground: keep the x, drop the y
+          dropCtrl.current = dropToGround(y)
           // outlive the onTap this pointer-up is about to fire, then allow taps again
           window.setTimeout(() => (dragged.current = false), 80)
         }}

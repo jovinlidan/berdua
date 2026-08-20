@@ -370,3 +370,35 @@ and check what hour the notification path will actually let through before picki
 already settled this once: Capsule's unlock uses `<input type="date">` with `T09:00`, so 09:00 was
 the house convention waiting to be reused rather than a fresh decision. Test a date feature in a
 WESTERN zone specifically, since a UTC-vs-local mistake often still looks right from UTC+7.
+
+## 2026-08-20: An assertion that passes with the feature removed is worse than no assertion
+**Context:** Adding "the pet falls back to the ground when released" came with a check that a longer
+fall takes longer than a shorter one. It passed. It also passed with the whole feature stashed,
+because the helper polled until the pet reached the floor and, when nothing ever brought it there,
+both runs simply hit the loop cap and the comparison came down to noise. Two timed-out
+measurements compared as if they were data.
+
+**Lesson:** Timing helpers that give up need to say so. Returning an elapsed number on both success
+and exhaustion makes "never happened" indistinguishable from "happened slowly", and the assertion
+built on it silently stops testing anything.
+
+**How to apply:** Return null (or throw) when a wait-for-condition loop exhausts, assert on that
+explicitly, and give comparisons a margin wider than the polling interval. Then run the test against
+the stashed change: 284ms vs 441ms with it, null vs null without it. Every new assertion in this
+session got that treatment, and it is the only reason two of them turned out to be worthless.
+
+## 2026-08-20: Changing behaviour invalidates the tests that pinned the old behaviour
+**Context:** The pet used to stay wherever it was dropped, and four assertions measured exactly that
+by reading its position after the drag settled. Making it fall back to the floor turned all four
+red, not because anything broke but because they were pinning the behaviour that was asked to
+change. The fix was to read the pet MID-AIR, straight after pointerup, before the fall starts.
+
+**Lesson:** When a deliberate behaviour change turns tests red, the question is which of the two the
+test was really protecting: the mechanism (drag moves the pet) or the old outcome (it stays put). The
+mechanism still deserves a test; the outcome does not.
+
+**How to apply:** Rewrite the assertion to measure the surviving mechanism rather than deleting it.
+Here the drag helper started returning the position captured at the moment of release, so the
+movement checks kept their meaning. Also watch the ordering: a preceding tap left the care sheet open
+over the pet, so the next drags hit the sheet and read as "no movement" for a completely unrelated
+reason.
