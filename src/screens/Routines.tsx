@@ -16,7 +16,7 @@ import {
   clearTodoRoutine,
   deleteTodo,
   setTodoRoutine,
-  toggleRoutineOccurrence,
+  setRoutinePaused,
   updateTodo,
 } from '../db/repo'
 import { todayIso } from '../lib/dates'
@@ -43,29 +43,34 @@ const dailyFromToday = (): Routine => ({ freq: 'daily', interval: 1, startDate: 
 export default function Routines() {
   const couple = useCouple()
   const routines = useRoutines()
-  const activePartner = useSession((s) => s.activePartner)
   const t = useT()
   const [editing, setEditing] = useState<Todo | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Todo | null>(null)
 
-  const todayKeyForCheck = todayIso()
-  // Stable identities: both are props of the memoized RoutineRow, so a fresh closure per render
-  // would re-render every row (and recompute every streak) on any state change up here.
-  const onCheck = useCallback(
+  const toast = useToast()
+  // Stable identity: this is a prop of the memoized RoutineRow, so a fresh closure per render would
+  // re-render every row (and recompute every streak) on any state change up here.
+  const onToggleEnabled = useCallback(
     (r: Todo) => {
-      haptic(isOccurrenceDone(r, todayKeyForCheck) ? 4 : [8, 20])
-      void toggleRoutineOccurrence(r.id, todayKeyForCheck, activePartner)
+      const turningOff = !r.routine?.paused
+      haptic(turningOff ? 4 : [8, 20])
+      void setRoutinePaused(r.id, turningOff)
+      toast(turningOff ? t('Switched off') : t('Switched back on'), turningOff ? '⏸️' : '🔁')
     },
-    [todayKeyForCheck, activePartner],
+    [toast, t],
   )
 
   if (!couple) return null
 
   const todayKey = todayIso()
   const list = routines ?? []
-  const dueToday = list.filter((r) => r.routine && occursOn(r.routine, todayKey) && withinLimits(r.routine, todayKey))
+  // Paused ones are their own group: they are neither happening today nor coming up, but they still
+  // need to be reachable to switch back on.
+  const paused = list.filter((r) => r.routine?.paused)
+  const running = list.filter((r) => r.routine && !r.routine.paused)
+  const dueToday = running.filter((r) => occursOn(r.routine!, todayKey) && withinLimits(r.routine!, todayKey))
   const todayIds = new Set(dueToday.map((r) => r.id))
-  const later = list.filter((r) => !todayIds.has(r.id))
+  const later = running.filter((r) => !todayIds.has(r.id))
   const doneToday = dueToday.filter((r) => isOccurrenceDone(r, todayKey)).length
 
   return (
@@ -98,7 +103,7 @@ export default function Routines() {
                   couple={couple}
                   todayKey={todayKey}
                   today
-                  onCheck={onCheck}
+                  onToggleEnabled={onToggleEnabled}
                   onEdit={setEditing}
                 />
               ))}
@@ -107,7 +112,28 @@ export default function Routines() {
           {later.length > 0 && (
             <Section label={dueToday.length > 0 ? t('Coming up') : t('All routines')}>
               {later.map((r) => (
-                <RoutineRow key={r.id} routine={r} couple={couple} todayKey={todayKey} onEdit={setEditing} />
+                <RoutineRow
+                  key={r.id}
+                  routine={r}
+                  couple={couple}
+                  todayKey={todayKey}
+                  onToggleEnabled={onToggleEnabled}
+                  onEdit={setEditing}
+                />
+              ))}
+            </Section>
+          )}
+          {paused.length > 0 && (
+            <Section label={t('Switched off')}>
+              {paused.map((r) => (
+                <RoutineRow
+                  key={r.id}
+                  routine={r}
+                  couple={couple}
+                  todayKey={todayKey}
+                  onToggleEnabled={onToggleEnabled}
+                  onEdit={setEditing}
+                />
               ))}
             </Section>
           )}
@@ -397,26 +423,35 @@ function ProgressLine({ routine, todayKey }: { routine: Todo; todayKey: string }
  * One routine. With `onCheck` it is today's occurrence and the circle ticks it off; without, it is
  * a future one, so the slot shows the repeat mark instead of a control that would tick the wrong day.
  */
+/**
+ * One routine, as something you switch on and off rather than tick.
+ *
+ * The circle is the routine's own on/off state, NOT today's occurrence. Ticking a day off happens on
+ * the calendar, against the day it actually happened, which is the only place that can be honest
+ * about a routine you kept on Tuesday but not on Wednesday. So this screen manages the routines and
+ * reports what they have added up to; the calendar records what really happened.
+ */
 const RoutineRow = memo(function RoutineRow({
   routine,
   couple,
   todayKey,
   today = false,
-  onCheck,
+  onToggleEnabled,
   onEdit,
 }: {
   routine: Todo
   couple: Couple
   todayKey: string
-  /** today's occurrence, so the circle ticks it off rather than showing the repeat mark */
+  /** due today, so the row can say whether today's occurrence has been ticked yet */
   today?: boolean
-  onCheck?: (r: Todo) => void
+  onToggleEnabled: (r: Todo) => void
   onEdit: (r: Todo) => void
 }) {
   const t = useT()
   const locale = activeDateLocale()
   const rule = routine.routine
-  const done = isOccurrenceDone(routine, todayKey)
+  const off = !!rule?.paused
+  const doneToday = today && isOccurrenceDone(routine, todayKey)
   // Each of these walks the tick log or the recurrence rule, so they are worth not repeating on a
   // render that changed nothing about this row.
   const { streak, progress, next } = useMemo(
@@ -437,48 +472,58 @@ const RoutineRow = memo(function RoutineRow({
       transition={{ type: 'spring', stiffness: 480, damping: 36 }}
       className="row flex items-center gap-3 p-3"
     >
-      {today && onCheck ? (
-        <button
-          type="button"
-          onClick={() => onCheck(routine)}
-          aria-label={done ? t('Mark not done') : t('Mark done')}
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-white transition active:scale-90"
-          style={
-            done
-              ? { backgroundColor: '#7C8A6F', boxShadow: 'inset 0 0 0 2px #7C8A6F' }
-              : { backgroundColor: 'rgba(200,106,81,0.15)', boxShadow: 'inset 0 0 0 2px #c86a51' }
-          }
-        >
-          <AnimatePresence>
-            {done && (
-              <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
-                <Check size={15} strokeWidth={3} />
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </button>
-      ) : (
-        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-cream-deep text-ink-soft">
-          <Repeat size={14} />
-        </span>
-      )}
+      <button
+        type="button"
+        onClick={() => onToggleEnabled(routine)}
+        role="switch"
+        aria-checked={!off}
+        aria-label={off ? t('Switch on') : t('Switch off')}
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-white transition active:scale-90"
+        style={
+          off
+            ? { backgroundColor: 'transparent', boxShadow: 'inset 0 0 0 2px rgba(138,115,106,0.45)' }
+            : { backgroundColor: '#c86a51', boxShadow: 'inset 0 0 0 2px #c86a51' }
+        }
+      >
+        <AnimatePresence>
+          {!off && (
+            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
+              <Check size={15} strokeWidth={3} />
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </button>
 
       <button type="button" onClick={() => onEdit(routine)} className="min-w-0 flex-1 text-left active:opacity-70">
-        <p className={`font-semibold leading-snug ${done ? 'text-ink-soft/60 line-through' : 'text-ink'}`}>
-          {routine.title}
-        </p>
-        {/* The rule, plus ONE more fact: when it next comes around for a future one, how far a
-            finite one has got otherwise. Three facts crowd the line and truncate the rule. */}
+        <p className={`font-semibold leading-snug ${off ? 'text-ink-soft' : 'text-ink'}`}>{routine.title}</p>
+        {/* The rule, plus ONE more fact. Three crowd the line and truncate the rule, so the second
+            slot leads with how many times it REALLY happened, which is the number these routines are
+            kept for, and only falls back to the next date for one that has not happened yet. */}
         <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-soft">
           <span className="truncate">{rule ? routineSummary(rule, t) : ''}</span>
-          {!today && next ? (
+          {/* The count shows even when switched off: a routine you have stopped is exactly when its
+              total is worth seeing, and the section header already says it is off. */}
+          {progress.done > 0 ? (
+            <span className="shrink-0">
+              ·{' '}
+              {progress.total === null
+                ? t('{done} done', { done: progress.done })
+                : t('{done} of {total} done', { done: progress.done, total: progress.total })}
+            </span>
+          ) : !off && !today && next ? (
+            // only for one that is NOT due today: `next` is inclusive of today, so a row under the
+            // Today heading would otherwise advertise today's own date as "next"
             <span className="shrink-0">· {t('next {date}', { date: format(parseISO(next), 'EEE, MMM d', { locale }) })}</span>
-          ) : progress.total ? (
-            <span className="shrink-0">· {progress.done}/{progress.total}</span>
           ) : null}
         </p>
       </button>
 
+      {doneToday && (
+        // read-only: today is already recorded, and the calendar is where that gets changed
+        <span className="shrink-0 text-[#7C8A6F]" title={t('Done today')} aria-label={t('Done today')}>
+          <Check size={15} strokeWidth={3} />
+        </span>
+      )}
       {streak >= 2 && (
         <span className="flex shrink-0 items-center gap-0.5 text-xs font-bold text-coral-deep">
           <Flame size={13} /> {streak}

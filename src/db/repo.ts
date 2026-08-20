@@ -311,6 +311,21 @@ export async function setTodoRoutine(id: string, routine: Routine): Promise<void
   await updateTodo(id, { routine: normalizeRoutine(routine), dueAt: undefined, done: false, doneAt: undefined })
 }
 
+/**
+ * Switch a routine off or back on. Off records the day, so the series ends there instead of the
+ * routine's past days vanishing from the calendar; on clears both and it resumes from today.
+ * Nothing about the tick log is touched either way, so the count of what actually happened and the
+ * streak survive a pause.
+ */
+export async function setRoutinePaused(id: string, paused: boolean): Promise<void> {
+  const todo = await db.todos.get(id)
+  if (!todo?.routine) return
+  const routine: Routine = paused
+    ? { ...todo.routine, paused: true, pausedAt: todayIso() }
+    : { ...todo.routine, paused: undefined, pausedAt: undefined }
+  await updateTodo(id, { routine })
+}
+
 /** Stop repeating. The tick history stays, so re-enabling the routine brings its streak back. */
 export async function clearTodoRoutine(id: string): Promise<void> {
   await updateTodo(id, { routine: undefined })

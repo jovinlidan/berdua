@@ -164,6 +164,23 @@ export const routineWeekdays = (routine: Routine): number[] =>
 
 const weekIndex = (key: DayKey) => Math.floor(daysBetween(SUNDAY_EPOCH, key) / 7)
 
+/**
+ * The last day a paused routine still counts, or null when it is running.
+ *
+ * A pause with no `pausedAt` (only reachable from a record written by an older build) falls back to
+ * hiding everything, which is the safer reading of "switched off" than silently staying on.
+ */
+function pauseStop(routine: Routine): DayKey | null {
+  if (!routine.paused) return null
+  return routine.pausedAt && isDayKey(routine.pausedAt) ? addDaysKey(routine.pausedAt, -1) : ''
+}
+
+/** Is `key` on or after the day this routine was switched off? */
+function pausedFrom(routine: Routine, key: DayKey): boolean {
+  const stop = pauseStop(routine)
+  return stop !== null && key > stop
+}
+
 /** The rule test itself, on an already-normalized routine (hot path, no re-normalizing). */
 function hits(routine: Routine, key: DayKey): boolean {
   if (key < routine.startDate) return false
@@ -212,6 +229,7 @@ export function occurrenceOrdinal(routine: Routine, key: DayKey): number | null 
 
 /** Does the rule land on that day? (ignores `until`/`count`; see `occurrenceKeys` for those) */
 export function occursOn(routine: Routine, key: DayKey): boolean {
+  if (pausedFrom(routine, key)) return false
   const r = normalizeRoutine(routine)
   if (!isDayKey(key) || !isDayKey(r.startDate)) return false
   return hits(r, key)
@@ -220,6 +238,14 @@ export function occursOn(routine: Routine, key: DayKey): boolean {
 /**
  * Every occurrence day inside `[fromKey, toKey]` (inclusive), honouring `until` and `count`.
  * Always bounded: by the window, by `cap`, and by a scan limit, so a corrupt rule can't spin.
+ *
+ * A paused routine stops at the day it was switched off. This and `occursOn` are the ONLY two
+ * places that check `paused`,
+ * because everything that asks "is it happening" goes through one of them: the calendar and the
+ * cron's push window expand with `occurrenceKeys`, `nextOccurrenceKey` is built on it, and today's
+ * list on Home and the Routines screen ask `occursOn`. Deliberately NOT gated in `hits`,
+ * `occurrenceOrdinal`, `occurrenceTotal`, `routineProgress` or `routineStreak`: those report what a
+ * routine HAS done, and a pause must not erase history or reset a streak.
  */
 export function occurrenceKeys(
   routine: Routine,
@@ -229,7 +255,11 @@ export function occurrenceKeys(
 ): DayKey[] {
   const r = normalizeRoutine(routine)
   if (!isDayKey(r.startDate) || !isDayKey(fromKey) || !isDayKey(toKey) || toKey < fromKey) return []
-  const end = r.until && r.until < toKey ? r.until : toKey
+  // A pause ends the series like a stricter `until`, so the days before it keep their place.
+  const stop = pauseStop(r)
+  if (stop !== null && stop < fromKey) return []
+  let end = r.until && r.until < toKey ? r.until : toKey
+  if (stop !== null && stop < end) end = stop
   if (end < r.startDate) return []
 
   const limit = r.count ?? null

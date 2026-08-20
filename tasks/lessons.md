@@ -317,3 +317,37 @@ narrower and more useful than "mouse differs from touch":
 So when auditing, grep for `onTap` next to `drag`, not for every draggable. Checked and clean:
 Map.tsx (onClick), Todos.tsx TodoRow (onClick, and it has the ref guard anyway), PetHabitat.tsx
 (drag with no tap or click handler on the draggable at all).
+
+## 2026-08-20: Put the gate where every caller already funnels through, not at each call site
+**Context:** Routines gained an on/off switch, which had to stop them appearing in five places: the
+Today list on the Routines screen, the Home summary, the calendar, the next-occurrence line, and the
+cron's push window. Five call sites is five chances to miss one. All five already funnelled through
+two functions in the recurrence engine (`occursOn` for "is it happening", `occurrenceKeys` for "list
+the days", which `nextOccurrenceKey` and the cron both build on), so the check went in those two and
+nothing else changed.
+
+**Lesson:** Before adding a condition to N callers, look for the function they all already go
+through. A single gate is not just less code, it is the difference between a feature that is
+consistent by construction and one that is consistent until someone adds a sixth caller.
+
+**How to apply:** Gate at the choke point, and be deliberate about what must NOT be gated: `hits`,
+`occurrenceOrdinal`, `occurrenceTotal`, `routineProgress` and `routineStreak` were left alone on
+purpose, because they report what a routine HAS done and a pause must not erase history or reset a
+streak. Write that reasoning in the comment at the gate, since the omission is the part a later
+reader will otherwise "fix".
+
+## 2026-08-20: Switching something off should end its series, not erase it
+**Context:** The first cut of pausing made a switched-off routine yield no occurrences at all, which
+also removed its PAST days from the calendar along with whatever had been ticked on them. Storing
+`pausedAt` (the day it was switched off) and treating a pause as a stricter `until` cost about six
+lines and kept the history where it belonged.
+
+**Lesson:** "Off" is a point in time, not a property of the whole record. Modelling it as a flag
+alone silently rewrites the past; modelling it as a flag plus a date leaves the record honest, and
+makes switching back on a resume rather than a restart.
+
+**How to apply:** Any reversible off-switch on something with history wants the date too. A related
+judgement went the other way and needed the e2e test to catch it: the first version also HID the
+"how many times this happened" count on a switched-off row, when that total is exactly what you want
+to see about a routine you have stopped. A test asserting the count survives being switched off is
+what surfaced the design mistake, not a bug.

@@ -93,6 +93,18 @@ export interface Routine {
   time?: string // 'HH:mm' local wall-clock for the nudge (absent = all-day, no push)
   until?: string | null // ISO yyyy-mm-dd, inclusive last day (absent/null = keeps going)
   count?: number | null // stop after N occurrences (absent/null = no limit)
+  /**
+   * Switched off: it stops coming around (no calendar days, no nudges, not due today) but keeps its
+   * rule and its whole tick history, so switching it back on resumes rather than restarts. Absent
+   * means running, so every routine that existed before this field stays exactly as it was.
+   */
+  paused?: boolean
+  /**
+   * The day it was switched off (ISO yyyy-mm-dd). A pause ends the series HERE rather than erasing
+   * it: days before this one still happened, so they stay on the calendar with whatever was ticked
+   * on them, and only this day onwards stops being expected.
+   */
+  pausedAt?: string
 }
 
 /**

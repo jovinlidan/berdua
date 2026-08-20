@@ -57,12 +57,20 @@ results.chipShowsRule = (await A.locator(`text=${SUMMARY}`).count()) > 0
 await A.click('[aria-label="Add routine"]')
 await A.waitForTimeout(700)
 results.rowShowsRoutine = (await A.locator(`text=${SUMMARY}`).count()) > 0
-results.startsUnticked = (await A.locator('[aria-label="Mark done"]').count()) > 0
+// The circle on this screen switches the routine on and off; it does NOT tick a day. Ticking moved
+// to the calendar, against the day it happened (see scripts/test-routine-switch.mjs).
+results.routinesScreenHasASwitchNotATick =
+  (await A.locator('[role="switch"]').count()) > 0 && (await A.locator('[aria-label="Mark done"]').count()) === 0
+results.switchStartsOn = (await A.locator('[role="switch"][aria-checked="true"]').count()) > 0
 
-// one tap ticks TODAY's occurrence (the activity itself stays on the list)
+// tick TODAY from the calendar, which is now the only place a day gets recorded
+await A.goto(`${base}/calendar`, { waitUntil: 'domcontentloaded' })
+await A.waitForTimeout(1400)
 await A.click('[aria-label="Mark done"]')
-await A.waitForTimeout(600)
+await A.waitForTimeout(700)
 results.tickedToday = (await A.locator('[aria-label="Mark not done"]').count()) > 0
+await A.goto(`${base}/routines`, { waitUntil: 'domcontentloaded' })
+await A.waitForTimeout(900)
 results.routineStaysOnList = (await A.locator(`text=${SUMMARY}`).count()) > 0
 
 // the wishlist is for one-off tasks now: the routine must not appear there
@@ -81,6 +89,7 @@ await A.goto(`${base}/calendar`, { waitUntil: 'domcontentloaded' })
 await A.waitForTimeout(900)
 results.calendarShowsToday = (await A.locator('text=Routine').count()) > 0
 results.calendarTodayTicked = (await A.locator('[aria-label="Mark not done"]').count()) > 0
+// the routine is on, so it is expected today and on the days around it
 await A.click(`[data-day="${iso(-1)}"]`)
 await A.waitForTimeout(500)
 results.calendarShowsYesterday = (await A.locator('[aria-label="Mark done"]').count()) > 0
@@ -92,10 +101,11 @@ await onboard(B, 'Sayang', CODE)
 await B.goto(`${base}/routines`, { waitUntil: 'domcontentloaded' })
 await B.waitForTimeout(3200)
 results.bPulledRoutine = (await B.locator(`text=${SUMMARY}`).count()) > 0
-results.bSeesPartnersTick = (await B.locator('[aria-label="Mark not done"]').count()) > 0
 
 await B.goto(`${base}/calendar`, { waitUntil: 'domcontentloaded' })
 await B.waitForTimeout(900)
+// A's tick is visible to B on the day it was made, which is where ticks live now
+results.bSeesPartnersTick = (await B.locator('[aria-label="Mark not done"]').count()) > 0
 await B.click(`[data-day="${iso(-1)}"]`)
 await B.waitForTimeout(500)
 await B.click('[aria-label="Mark done"]')

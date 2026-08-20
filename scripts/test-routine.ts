@@ -400,4 +400,56 @@ events = dueReminders(remindDoc([routineTodo({ routine: rule({ time: '12:00' }) 
 assert.equal(events.filter((e) => e.key.startsWith('routine:')).length, 0)
 ok('a long-missed occurrence stops nudging (6h window, like dated to-dos)')
 
+// ── switched off (paused) ──────────────────────────────────────────────────────────────────────
+// Pausing has to do three things at once: stop the routine coming around, KEEP the days it already
+// happened on, and leave the tick history alone so the count of what really happened survives.
+const paused = rule({ paused: true, pausedAt: '2026-06-10' })
+
+assert.equal(occursOn(paused, '2026-06-10'), false)
+assert.equal(occursOn(paused, '2026-06-11'), false)
+ok('a paused routine does not occur on the pause day or after it')
+
+assert.equal(occursOn(paused, '2026-06-09'), true)
+ok('a paused routine still occurred on the days before it was switched off')
+
+assert.deepEqual(occurrenceKeys(paused, '2026-06-08', '2026-06-14'), ['2026-06-08', '2026-06-09'])
+ok('expansion stops at the pause day, so past days keep their place on the calendar')
+
+assert.deepEqual(occurrenceKeys(paused, '2026-06-11', '2026-06-20'), [])
+ok('a window entirely after the pause is empty')
+
+assert.equal(nextOccurrenceKey(paused, '2026-06-10'), null)
+ok('a paused routine has no next occurrence')
+
+// history must be untouched: 3 ticks before the pause still read as 3 that really happened
+const pausedWithTicks = routineTodo({
+  routine: paused,
+  routineLog: {
+    '2026-06-07': { done: true, at: 1, by: 'A' },
+    '2026-06-08': { done: true, at: 2, by: 'B' },
+    '2026-06-09': { done: true, at: 3, by: 'A' },
+  },
+})
+assert.equal(routineProgress(pausedWithTicks).done, 3)
+ok('pausing does not change how many occurrences really happened')
+
+assert.equal(routineStreak(pausedWithTicks, '2026-06-09'), 3)
+ok('pausing does not reset the streak')
+
+// the cron must go quiet for it
+events = dueReminders(remindDoc([routineTodo({ routine: { ...paused, time: '12:00', pausedAt: '2026-06-01' } })]), NOW)
+assert.equal(events.filter((e) => e.key.startsWith('routine:')).length, 0)
+ok('a paused routine stops nudging')
+
+// switching back on is a plain resume, rule and history intact
+const resumed = { ...paused, paused: undefined, pausedAt: undefined } as Routine
+assert.equal(occursOn(resumed, '2026-06-11'), true)
+assert.equal(routineProgress({ ...pausedWithTicks, routine: resumed }).done, 3)
+ok('switching back on resumes the same rule and keeps the history')
+
+// a record written without a pause date (older build) hides rather than silently staying on
+assert.equal(occursOn({ ...rule(), paused: true }, '2026-06-11'), false)
+assert.deepEqual(occurrenceKeys({ ...rule(), paused: true }, '2026-06-01', '2026-06-20'), [])
+ok('paused with no pause date hides everything, the safer reading of switched off')
+
 console.log(`\nAll ${n} routine checks passed ✅`)
