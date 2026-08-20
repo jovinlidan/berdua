@@ -17,16 +17,39 @@ import { whenLabel } from '../lib/dates'
 import { haptic } from '../lib/haptics'
 import { useT } from '../lib/i18n'
 import { openNavigation } from '../lib/navlinks'
+import { dayKeyOf, localOccurrenceInstant } from '../lib/recurrence'
 import { PARTNER_COLORS, partnerName } from '../lib/partners'
 import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
 import type { Couple, Todo, TodoGroup } from '../types'
 
-/** epoch ms → a value the <input type="datetime-local"> understands (local time, no seconds). */
-function toLocalInput(ms?: number): string {
-  if (!ms) return ''
-  const d = new Date(ms - new Date().getTimezoneOffset() * 60000)
-  return d.toISOString().slice(0, 16)
+/**
+ * The hour a date-only reminder fires at, local time.
+ *
+ * Not midnight: the default quiet hours are 22:00 to 08:00, and the cron drops everything inside
+ * them, so a reminder stored at midnight would never be delivered at all. 09:00 is clear of that
+ * and reads as a morning nudge.
+ */
+const REMINDER_HOUR = '09:00'
+
+/** epoch ms → the 'yyyy-mm-dd' an <input type="date"> wants, in LOCAL time. */
+const toDateInput = (ms?: number): string => (ms ? dayKeyOf(ms) : '')
+
+/**
+ * 'yyyy-mm-dd' → the instant to remind at.
+ *
+ * Deliberately NOT `new Date(value)`: an ISO date-only string is parsed as UTC midnight, which for
+ * anyone east or west of UTC lands on the wrong local hour and sometimes the wrong day entirely.
+ * `localOccurrenceInstant` builds it from local calendar fields instead.
+ *
+ * `keep` is the reminder already stored. When the day has not changed, that exact instant is
+ * returned untouched, so opening a to-do that was set for 14:30 and saving an unrelated edit does
+ * not quietly drag it to 09:00.
+ */
+function fromDateInput(value: string, keep?: number): number | undefined {
+  if (!value) return undefined
+  if (keep && dayKeyOf(keep) === value) return keep
+  return localOccurrenceInstant(value, REMINDER_HOUR)
 }
 
 export default function Todos() {
@@ -609,12 +632,12 @@ function TodoEditForm({
   const toast = useToast()
   const [title, setTitle] = useState(todo.title)
   const [note, setNote] = useState(todo.note ?? '')
-  const [due, setDue] = useState(() => toLocalInput(todo.dueAt))
+  const [due, setDue] = useState(() => toDateInput(todo.dueAt))
 
   const edits = () => ({
     title: title.trim(),
     note: note.trim() || undefined,
-    dueAt: due ? new Date(due).getTime() : undefined,
+    dueAt: fromDateInput(due, todo.dueAt),
   })
 
   async function save() {
@@ -665,7 +688,7 @@ function TodoEditForm({
       <div>
         <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Reminder (optional)')}</label>
         <div className="flex items-center gap-2">
-          <input type="datetime-local" className="field" value={due} onChange={(e) => setDue(e.target.value)} />
+          <input type="date" className="field" value={due} onChange={(e) => setDue(e.target.value)} />
           {due && (
             <button
               type="button"
@@ -754,7 +777,7 @@ function TodoComposer({ groups }: { groups: TodoGroup[] }) {
       note: note.trim() || undefined,
       category: target,
       addedBy: activePartner,
-      dueAt: showDue && due ? new Date(due).getTime() : undefined,
+      dueAt: showDue ? fromDateInput(due) : undefined,
     })
     setTitle('')
     setNote('')
@@ -835,7 +858,7 @@ function TodoComposer({ groups }: { groups: TodoGroup[] }) {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            type="datetime-local"
+            type="date"
             value={due}
             onChange={(e) => setDue(e.target.value)}
             className="mt-2 w-full rounded-xl bg-cream-deep px-3 py-1.5 text-sm text-ink outline-none"

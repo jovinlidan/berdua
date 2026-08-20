@@ -26,9 +26,9 @@ export const formatTime = (ms: number) => format(new Date(ms), 'h:mm a', loc())
 /** Friendly "when" label for upcoming dates. */
 export function whenLabel(ms: number): string {
   const d = new Date(ms)
-  if (isToday(d)) return `${tNow('Today')} · ${format(d, 'h:mm a', loc())}`
-  if (isTomorrow(d)) return `${tNow('Tomorrow')} · ${format(d, 'h:mm a', loc())}`
-  return format(d, 'EEE, MMM d · h:mm a', loc())
+  if (isToday(d)) return tNow('Today')
+  if (isTomorrow(d)) return tNow('Tomorrow')
+  return format(d, 'EEE, MMM d', loc())
 }
 
 /** Short relative countdown: "Today" / "Tomorrow" / "in 3 days". */
@@ -39,9 +39,3 @@ export function countdownLabel(ms: number): string {
   return tNow('in {n} days', { n: days })
 }
 
-/** value for <input type="datetime-local">, in the user's local time */
-export function toDatetimeLocal(ms: number): string {
-  const d = new Date(ms)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}

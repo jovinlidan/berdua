@@ -351,3 +351,22 @@ judgement went the other way and needed the e2e test to catch it: the first vers
 "how many times this happened" count on a switched-off row, when that total is exactly what you want
 to see about a routine you have stopped. A test asserting the count survives being switched off is
 what surfaced the design mistake, not a bug.
+
+## 2026-08-20: `new Date('yyyy-mm-dd')` is UTC midnight, and quiet hours turn that into silence
+**Context:** Switching the wishlist reminder from a datetime picker to a date picker looked like a
+one-line change of `type="datetime-local"` to `type="date"`. The value it hands back is
+`'2026-08-24'`, and `new Date` parses an ISO date-only string as UTC midnight, not local. Measured
+across four zones: in Los Angeles that is the PREVIOUS day at 17:00; in London it is 01:00 and in
+Jakarta 07:00, both inside the app's default quiet hours (22:00 to 08:00) where the cron drops
+everything, so the reminder would never have been delivered at all. Three of four zones broken,
+including the one the app is actually used in.
+
+**Lesson:** A date-only string needs building from local calendar fields, never `new Date(value)`.
+And a date-only reminder needs an explicit hour: midnight is both arbitrary and, with quiet hours in
+play, exactly the hour that guarantees nothing arrives.
+
+**How to apply:** Use the existing `localOccurrenceInstant(dayKey, 'HH:mm')` from `lib/recurrence`,
+and check what hour the notification path will actually let through before picking one. The app had
+already settled this once: Capsule's unlock uses `<input type="date">` with `T09:00`, so 09:00 was
+the house convention waiting to be reused rather than a fresh decision. Test a date feature in a
+WESTERN zone specifically, since a UTC-vs-local mistake often still looks right from UTC+7.
