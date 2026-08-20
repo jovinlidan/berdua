@@ -9,6 +9,7 @@ import { BottomSheet } from '../components/BottomSheet'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 import { RoutineSheet } from '../components/RoutineSheet'
+import { Switch } from '../components/Switch'
 import { useToast } from '../components/Toast'
 import { useCouple, useRoutines } from '../db/hooks'
 import {
@@ -472,27 +473,7 @@ const RoutineRow = memo(function RoutineRow({
       transition={{ type: 'spring', stiffness: 480, damping: 36 }}
       className="row flex items-center gap-3 p-3"
     >
-      <button
-        type="button"
-        onClick={() => onToggleEnabled(routine)}
-        role="switch"
-        aria-checked={!off}
-        aria-label={off ? t('Switch on') : t('Switch off')}
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-white transition active:scale-90"
-        style={
-          off
-            ? { backgroundColor: 'transparent', boxShadow: 'inset 0 0 0 2px rgba(138,115,106,0.45)' }
-            : { backgroundColor: '#c86a51', boxShadow: 'inset 0 0 0 2px #c86a51' }
-        }
-      >
-        <AnimatePresence>
-          {!off && (
-            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
-              <Check size={15} strokeWidth={3} />
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </button>
+      <Switch checked={!off} onChange={() => onToggleEnabled(routine)} label={routine.title} />
 
       <button type="button" onClick={() => onEdit(routine)} className="min-w-0 flex-1 text-left active:opacity-70">
         <p className={`font-semibold leading-snug ${off ? 'text-ink-soft' : 'text-ink'}`}>{routine.title}</p>

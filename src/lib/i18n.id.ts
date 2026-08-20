@@ -307,8 +307,8 @@ export const ID: Record<string, string> = {
   'Add to-do': 'Tambah tugas',
   'Note added': 'Catatan ditambahkan',
   'Add a note': 'Tambah catatan',
-  'Reminder on': 'Pengingat aktif',
-  'Add a reminder': 'Tambah pengingat',
+  'Date set': 'Tanggal aktif',
+  'Add a date': 'Tambah tanggal',
   'A little more detail… (optional)': 'Sedikit detail tambahan… (opsional)',
   'New tasks go to': 'Tugas baru masuk ke',
   New: 'Baru',
@@ -333,8 +333,8 @@ export const ID: Record<string, string> = {
   'What needs doing?': 'Apa yang perlu dikerjakan?',
   'Note (optional)': 'Catatan (opsional)',
   'A little more detail…': 'Sedikit detail tambahan…',
-  'Reminder (optional)': 'Pengingat (opsional)',
-  'Clear reminder': 'Hapus pengingat',
+  'Date (optional)': 'Tanggal (opsional)',
+  'Clear date': 'Hapus tanggal',
   'Mark not done': 'Tandai belum selesai',
   'Mark done': 'Tandai selesai',
   Done: 'Selesai',
@@ -470,8 +470,8 @@ export const ID: Record<string, string> = {
   '{done} of {total} done today': '{done} dari {total} selesai hari ini',
   'All done today 💞': 'Semua selesai hari ini 💞',
   '{n} routine days kept together': '{n} hari rutinitas dijalani bersama',
-  'Add a reminder or a repeating routine to a wishlist item and it shows up here.':
-    'Tambahkan pengingat atau rutinitas berulang ke item wishlist, dan ia akan muncul di sini.',
+  'Add a date or a repeating routine to a wishlist item and it shows up here.':
+    'Tambahkan tanggal atau rutinitas berulang ke item wishlist, dan ia akan muncul di sini.',
 
   // Thinking-of-you history
   'Thinking of you': 'Memikirkanmu',

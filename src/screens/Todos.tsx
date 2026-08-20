@@ -686,14 +686,14 @@ function TodoEditForm({
         />
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Reminder (optional)')}</label>
+        <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Date (optional)')}</label>
         <div className="flex items-center gap-2">
           <input type="date" className="field" value={due} onChange={(e) => setDue(e.target.value)} />
           {due && (
             <button
               type="button"
               onClick={() => setDue('')}
-              aria-label={t('Clear reminder')}
+              aria-label={t('Clear date')}
               className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cream-deep text-ink-soft transition active:scale-90"
             >
               <X size={18} />
@@ -835,7 +835,7 @@ function TodoComposer({ groups }: { groups: TodoGroup[] }) {
           onClick={() => setShowDue((v) => !v)}
           className={`chip ${showDue ? 'bg-coral/15 text-coral-deep' : 'bg-cream-deep text-ink-soft'}`}
         >
-          <CalendarClock size={14} /> {showDue ? t('Reminder on') : t('Add a reminder')}
+          <CalendarClock size={14} /> {showDue ? t('Date set') : t('Add a date')}
         </button>
       </div>
       <AnimatePresence>

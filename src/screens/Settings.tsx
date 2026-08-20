@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { LANGS, useT } from '../lib/i18n'
 import { BottomSheet } from '../components/BottomSheet'
 import { PageHeader } from '../components/PageHeader'
+import { SwitchTrack } from '../components/Switch'
 import { useToast } from '../components/Toast'
 import { db } from '../db/database'
 import { useCouple } from '../db/hooks'
@@ -501,20 +502,17 @@ function LabeledInput({
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  // The whole row is the target, label included, so this owns the button and uses the bare track.
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={checked}
       onClick={() => onChange(!checked)}
       className="mt-3 flex w-full items-center justify-between gap-3"
     >
       <span className="text-left text-sm font-semibold text-ink">{label}</span>
-      <span
-        className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? 'bg-coral' : 'bg-ink/15'}`}
-      >
-        <span
-          className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${checked ? 'left-6' : 'left-1'}`}
-        />
-      </span>
+      <SwitchTrack checked={checked} />
     </button>
   )
 }

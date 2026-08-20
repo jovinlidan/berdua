@@ -40,10 +40,10 @@ const target = await p.evaluate(() => {
 })
 // composer: add a to-do with a date reminder
 await p.fill('input[placeholder="Add a task…"]', 'Book the cabin')
-await p.click('text=Add a reminder')
+await p.click('text=Add a date')
 await p.waitForTimeout(500)
 const composerInput = p.locator('input[type="date"]').first()
-if ((await composerInput.count()) === 0) failures.push(`${TZ}: composer reminder is not a date input`)
+if ((await composerInput.count()) === 0) failures.push(`${TZ}: the composer date field is not a date input`)
 await composerInput.fill(target)
 await p.waitForTimeout(300)
 await p.click('[aria-label="Add to-do"]')

@@ -278,7 +278,7 @@ export default function Calendar() {
               <EmptyState
                 emoji="🗓️"
                 title={t('Nothing on this day')}
-                subtitle={t('Add a reminder or a repeating routine to a wishlist item and it shows up here.')}
+                subtitle={t('Add a date or a repeating routine to a wishlist item and it shows up here.')}
               />
             )}
           </motion.div>
