@@ -13,20 +13,25 @@ import {
   startOfWeek,
 } from 'date-fns'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CalendarPlus, Check, ChevronLeft, ChevronRight, Heart } from 'lucide-react'
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, Heart, Plus, Repeat } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { BottomSheet } from '../components/BottomSheet'
+import { Chip } from '../components/Chip'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
+import { RoutineSheet } from '../components/RoutineSheet'
 import { useToast } from '../components/Toast'
-import { useCalendarEvents, useCouple, useTodos, type CalendarEvent, type CalendarEventType } from '../db/hooks'
-import { toggleRoutineOccurrence } from '../db/repo'
-import { formatTime } from '../lib/dates'
+import { useCalendarEvents, useCouple, useTodoGroups, useTodos, type CalendarEvent, type CalendarEventType } from '../db/hooks'
+import { addTodo, toggleRoutineOccurrence } from '../db/repo'
+import { DAY_REMINDER_HOUR, formatTime } from '../lib/dates'
 import { haptic } from '../lib/haptics'
 import { activeDateLocale, useT } from '../lib/i18n'
+import { localOccurrenceInstant, routineSummary } from '../lib/recurrence'
+import { ROUTINE_CATEGORY } from '../lib/taxonomy'
 import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
-import type { PartnerKey } from '../types'
+import type { PartnerKey, Routine } from '../types'
 
 // Labels are translated at render via t(); colors/emoji stay as-is. A routine carries no emoji:
 // its row is interactive, so the slot holds a real check control instead (see RoutineRow).
@@ -47,6 +52,7 @@ export default function Calendar() {
   const navigate = useNavigate()
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()))
   const [selected, setSelected] = useState(() => new Date())
+  const [adding, setAdding] = useState(false)
 
   // Routines are expanded per day on read, so the query is bounded to the visible month plus a
   // month of slack either side. The selected day is folded in as well: stepping the cursor two
@@ -215,7 +221,23 @@ export default function Calendar() {
 
       {/* selected day detail (see RoutineRow below for the tick-off row) */}
       <div className="mt-5">
-        <h2 className="mb-2 px-1 font-serif text-lg font-semibold text-ink">{format(selected, 'EEEE, MMMM d', { locale })}</h2>
+        <div className="mb-2 flex items-center justify-between gap-2 px-1">
+          <h2 className="min-w-0 truncate font-serif text-lg font-semibold text-ink">
+            {format(selected, 'EEEE, MMMM d', { locale })}
+          </h2>
+          {/* Adding straight onto the day you are looking at, rather than going to another screen
+              and setting the date by hand. */}
+          <button
+            type="button"
+            onClick={() => {
+              haptic(6)
+              setAdding(true)
+            }}
+            className="chip shrink-0 bg-cream-deep text-ink-soft"
+          >
+            <Plus size={14} /> {t('Add')}
+          </button>
+        </div>
         <AnimatePresence mode="wait">
           <motion.div
             key={dayKey(selected)}
@@ -284,6 +306,8 @@ export default function Calendar() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      <AddToDaySheet key={selectedKey} open={adding} onClose={() => setAdding(false)} day={selected} />
     </div>
   )
 }
@@ -293,6 +317,130 @@ export default function Calendar() {
  * the couple can tick THAT day off right here (each day carries its own state), and hand the whole
  * repeating series to the phone's calendar app.
  */
+/**
+ * Add a to-do or a routine straight onto the day being looked at.
+ *
+ * One sheet with a type switch rather than two entry points, because the only real difference is
+ * what the day MEANS: a to-do gets it as its reminder date, a routine gets it as the day its rule
+ * starts from. Keyed by day by the caller, so reopening on another day starts clean.
+ */
+function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => void; day: Date }) {
+  const t = useT()
+  const toast = useToast()
+  const locale = activeDateLocale()
+  const groups = useTodoGroups()
+  const activePartner = useSession((s) => s.activePartner)
+  const dayIso = dayKey(day)
+
+  const [kind, setKind] = useState<'todo' | 'routine'>('todo')
+  const [title, setTitle] = useState('')
+  const [category, setCategory] = useState<string | null>(null)
+  // a routine always has a rule, so it starts with one: every day, from the day being added to
+  const [rule, setRule] = useState<Routine>({ freq: 'daily', interval: 1, startDate: dayIso })
+  const [rulesOpen, setRulesOpen] = useState(false)
+
+  const groupList = groups ?? []
+  const target = category ?? groupList[0]?.id ?? 'other'
+
+  async function add() {
+    const text = title.trim()
+    if (!text) return
+    if (kind === 'routine') {
+      await addTodo({ title: text, category: ROUTINE_CATEGORY, addedBy: activePartner, routine: rule })
+      toast(t('Routine added'), '\u{1F501}')
+    } else {
+      await addTodo({
+        title: text,
+        category: target,
+        addedBy: activePartner,
+        // the same 09:00 the wishlist uses, so a day picked here behaves like one picked there
+        dueAt: localOccurrenceInstant(dayIso, DAY_REMINDER_HOUR),
+      })
+      toast(t('Added to {date}', { date: format(day, 'MMM d', { locale }) }), '\u{2705}')
+    }
+    haptic(8)
+    setTitle('')
+    onClose()
+  }
+
+  return (
+    <>
+      <BottomSheet
+        open={open}
+        onClose={onClose}
+        title={t('Add to {date}', { date: format(day, 'EEE, MMM d', { locale }) })}
+      >
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Chip active={kind === 'todo'} onClick={() => setKind('todo')}>
+              {t('To-do')}
+            </Chip>
+            <Chip active={kind === 'routine'} onClick={() => setKind('routine')}>
+              <Repeat size={14} /> {t('Routine')}
+            </Chip>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-bold text-ink-soft">
+              {kind === 'routine' ? t('Routine') : t('Task')}
+            </label>
+            <input
+              className="field"
+              placeholder={kind === 'routine' ? t('What do you two do together?') : t('Add a task\u2026')}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && add()}
+            />
+          </div>
+
+          {kind === 'routine' ? (
+            <div>
+              <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('Repeats')}</label>
+              <button
+                type="button"
+                onClick={() => setRulesOpen(true)}
+                className="field flex items-center gap-2 text-left"
+              >
+                <Repeat size={16} className="shrink-0 text-ink-soft" />
+                <span className="min-w-0 flex-1 truncate font-semibold text-ink">{routineSummary(rule, t)}</span>
+                <span className="shrink-0 text-xs font-bold text-coral-deep">{t('Change')}</span>
+              </button>
+            </div>
+          ) : (
+            groupList.length > 0 && (
+              <div>
+                <label className="mb-1.5 block text-sm font-bold text-ink-soft">{t('List')}</label>
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {groupList.map((g) => (
+                    <Chip key={g.id} active={target === g.id} color={g.tint} onClick={() => setCategory(g.id)}>
+                      {g.emoji} {t(g.label)}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+            )
+          )}
+
+          <button type="button" className="btn-primary w-full" disabled={!title.trim()} onClick={add}>
+            {kind === 'routine' ? t('Add routine') : t('Add to-do')}
+          </button>
+        </div>
+      </BottomSheet>
+
+      {/* stacked on top, same as the wishlist and routines screens */}
+      <RoutineSheet
+        open={rulesOpen}
+        onClose={() => setRulesOpen(false)}
+        value={rule}
+        onSave={(next) => {
+          setRule(next)
+          setRulesOpen(false)
+        }}
+      />
+    </>
+  )
+}
+
 function RoutineRow({
   event,
   by,

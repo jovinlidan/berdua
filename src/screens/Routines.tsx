@@ -34,11 +34,11 @@ import {
   withinLimits,
 } from '../lib/recurrence'
 import { downloadTodoIcs } from '../lib/todoIcs'
+import { ROUTINE_CATEGORY } from '../lib/taxonomy'
 import { useSession } from '../store/useSession'
 import type { Couple, Routine, Todo } from '../types'
 
 /** New routines carry their own category, so they never mingle with the wishlist's groups. */
-const ROUTINE_CATEGORY = 'routine'
 const dailyFromToday = (): Routine => ({ freq: 'daily', interval: 1, startDate: todayIso() })
 
 export default function Routines() {

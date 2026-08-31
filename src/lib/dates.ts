@@ -23,6 +23,15 @@ export const formatDay = (ms: number) => format(new Date(ms), 'EEE, MMM d', loc(
 export const formatDayLong = (ms: number) => format(new Date(ms), 'EEEE, MMMM d, yyyy', loc())
 export const formatTime = (ms: number) => format(new Date(ms), 'h:mm a', loc())
 
+/**
+ * The local hour a date-only reminder fires at.
+ *
+ * Not midnight: the default quiet hours are 22:00 to 08:00 and the cron drops everything inside
+ * them, so a reminder stored at midnight would never be delivered. Matches what Capsule already
+ * uses for an unlock day.
+ */
+export const DAY_REMINDER_HOUR = '09:00'
+
 /** Friendly "when" label for upcoming dates. */
 export function whenLabel(ms: number): string {
   const d = new Date(ms)

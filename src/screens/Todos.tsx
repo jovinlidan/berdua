@@ -13,7 +13,7 @@ import { RoutineSheet } from '../components/RoutineSheet'
 import { useToast } from '../components/Toast'
 import { useCouple, useTodoGroups, useWishlist } from '../db/hooks'
 import { addTodo, addTodoGroup, clearTodoPlace, deleteTodo, deleteTodoGroup, moveTodoGroup, setTodoRoutine, toggleTodo, updateTodo, updateTodoGroup } from '../db/repo'
-import { whenLabel } from '../lib/dates'
+import { DAY_REMINDER_HOUR, whenLabel } from '../lib/dates'
 import { haptic } from '../lib/haptics'
 import { useT } from '../lib/i18n'
 import { openNavigation } from '../lib/navlinks'
@@ -22,15 +22,6 @@ import { PARTNER_COLORS, partnerName } from '../lib/partners'
 import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
 import type { Couple, Todo, TodoGroup } from '../types'
-
-/**
- * The hour a date-only reminder fires at, local time.
- *
- * Not midnight: the default quiet hours are 22:00 to 08:00, and the cron drops everything inside
- * them, so a reminder stored at midnight would never be delivered at all. 09:00 is clear of that
- * and reads as a morning nudge.
- */
-const REMINDER_HOUR = '09:00'
 
 /** epoch ms → the 'yyyy-mm-dd' an <input type="date"> wants, in LOCAL time. */
 const toDateInput = (ms?: number): string => (ms ? dayKeyOf(ms) : '')
@@ -49,7 +40,7 @@ const toDateInput = (ms?: number): string => (ms ? dayKeyOf(ms) : '')
 function fromDateInput(value: string, keep?: number): number | undefined {
   if (!value) return undefined
   if (keep && dayKeyOf(keep) === value) return keep
-  return localOccurrenceInstant(value, REMINDER_HOUR)
+  return localOccurrenceInstant(value, DAY_REMINDER_HOUR)
 }
 
 export default function Todos() {

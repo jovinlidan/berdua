@@ -17,6 +17,13 @@ export const TODO_CATEGORIES: Record<TodoCategory, { label: string; emoji: strin
 }
 export const TODO_CATEGORY_ORDER: TodoCategory[] = ['food', 'movie', 'game', 'travel']
 
+/**
+ * The category a repeating activity is filed under. Note this is NOT what makes something a
+ * routine: the hooks split the two lists on whether `Todo.routine` exists at all. This just keeps
+ * routines out of the wishlist's category chips.
+ */
+export const ROUTINE_CATEGORY = 'routine'
+
 // Daily check-in 1–5 mood scale (distinct from memory MOODS).
 export const DAILY_MOODS: { value: number; emoji: string; label: string }[] = [
   { value: 1, emoji: '😔', label: 'Low' },
