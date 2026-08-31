@@ -23,7 +23,7 @@ import { PageHeader } from '../components/PageHeader'
 import { RoutineSheet } from '../components/RoutineSheet'
 import { useToast } from '../components/Toast'
 import { useCalendarEvents, useCouple, useTodoGroups, useTodos, type CalendarEvent, type CalendarEventType } from '../db/hooks'
-import { addTodo, toggleRoutineOccurrence } from '../db/repo'
+import { addTodo, toggleRoutineOccurrence, updateTodo } from '../db/repo'
 import { DAY_REMINDER_HOUR, formatTime } from '../lib/dates'
 import { haptic } from '../lib/haptics'
 import { activeDateLocale, useT } from '../lib/i18n'
@@ -31,7 +31,7 @@ import { localOccurrenceInstant, routineSummary } from '../lib/recurrence'
 import { ROUTINE_CATEGORY, defaultTodoList } from '../lib/taxonomy'
 import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
-import type { PartnerKey, Routine } from '../types'
+import type { PartnerKey, Routine, Todo } from '../types'
 
 // Labels are translated at render via t(); colors/emoji stay as-is. A routine carries no emoji:
 // its row is interactive, so the slot holds a real check control instead (see RoutineRow).
@@ -329,12 +329,14 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
   const toast = useToast()
   const locale = activeDateLocale()
   const groups = useTodoGroups()
+  const todos = useTodos()
   const activePartner = useSession((s) => s.activePartner)
   const lastTodoList = useSession((s) => s.lastTodoList)
   const setLastTodoList = useSession((s) => s.setLastTodoList)
   const dayIso = dayKey(day)
 
-  const [kind, setKind] = useState<'todo' | 'routine'>('todo')
+  const [kind, setKind] = useState<'todo' | 'routine' | 'existing'>('todo')
+  const [query, setQuery] = useState('')
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState<string | null>(null)
   // a routine always has a rule, so it starts with one: every day, from the day being added to
@@ -343,6 +345,25 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
 
   const groupList = groups ?? []
   const target = defaultTodoList(groupList, lastTodoList, category)
+
+  // Only to-dos are offered. A routine is already on its own days, so "add it to this date" has no
+  // honest meaning: repointing its startDate would move every day it lands on and renumber its
+  // occurrences, and a one-off extra day is not something the rule can express.
+  const pickable = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return (todos ?? [])
+      .filter((td) => !td.routine && !td.done && (!q || td.title.toLowerCase().includes(q)))
+      // undated first: giving a date to something that has none is the common case, and moving one
+      // that already has a date is the rarer, more deliberate act
+      .sort((a, b) => (a.dueAt ? 1 : 0) - (b.dueAt ? 1 : 0))
+  }, [todos, query])
+
+  async function assign(todo: Todo) {
+    await updateTodo(todo.id, { dueAt: localOccurrenceInstant(dayIso, DAY_REMINDER_HOUR) })
+    haptic(8)
+    toast(t('Added to {date}', { date: format(day, 'MMM d', { locale }) }), '\u{2705}')
+    onClose()
+  }
 
   async function add() {
     const text = title.trim()
@@ -381,8 +402,52 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
             <Chip active={kind === 'routine'} onClick={() => setKind('routine')}>
               <Repeat size={14} /> {t('Routine')}
             </Chip>
+            <Chip active={kind === 'existing'} onClick={() => setKind('existing')}>
+              {t('Pick one')}
+            </Chip>
           </div>
 
+          {kind === 'existing' ? (
+            <div>
+              <label className="mb-1.5 block text-sm font-bold text-ink-soft">
+                {t('Something already on your wishlist')}
+              </label>
+              <input
+                className="field"
+                placeholder={t('Search…')}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              {pickable.length === 0 ? (
+                <p className="mt-3 px-1 text-sm text-ink-soft">
+                  {query.trim() ? t('Nothing matches that.') : t('Nothing on the wishlist to pick yet.')}
+                </p>
+              ) : (
+                <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
+                  {pickable.map((td) => (
+                    <button
+                      key={td.id}
+                      type="button"
+                      onClick={() => assign(td)}
+                      className="row flex w-full items-center gap-3 p-3 text-left active:scale-[0.99]"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold text-ink">{td.title}</span>
+                        {/* an existing date means picking this MOVES it, which is worth saying */}
+                        {td.dueAt && (
+                          <span className="block text-xs text-ink-soft">
+                            {t('now {date}', { date: format(td.dueAt, 'EEE, MMM d', { locale }) })}
+                          </span>
+                        )}
+                      </span>
+                      <Plus size={16} className="shrink-0 text-coral-deep" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
           <div>
             <label className="mb-1.5 block text-sm font-bold text-ink-soft">
               {kind === 'routine' ? t('Routine') : t('Task')}
@@ -427,6 +492,8 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
           <button type="button" className="btn-primary w-full" disabled={!title.trim()} onClick={add}>
             {kind === 'routine' ? t('Add routine') : t('Add to-do')}
           </button>
+            </>
+          )}
         </div>
       </BottomSheet>
 
