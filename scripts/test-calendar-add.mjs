@@ -32,7 +32,10 @@ r.addButtonPresent = (await p.locator('text=Add').first().count()) > 0
 await p.locator('button:has-text("Add")').first().click(); await p.waitForTimeout(800)
 const sheet = await p.locator('[role=dialog]').innerText()
 r.sheetNamesTheDay = /Add to \w{3}, \w{3} \d+/.test(sheet)
-r.offersBothOptions = /To-do/.test(sheet) && /Routine/.test(sheet)
+// all four modes: create either kind, or pick an existing one of either kind
+r.offersAllFourModes = ['New to-do', 'New routine', 'Pick wishlist', 'Pick routine'].every((label) =>
+  sheet.includes(label),
+)
 
 await p.locator('[role=dialog] input').first().fill('Dinner reservation')
 await p.locator('[role=dialog] button:has-text("Add to-do")').click()
@@ -53,7 +56,7 @@ console.log('stored to-do:', JSON.stringify(stored), 'picked', future)
 
 // now a routine on the same day
 await p.locator('button:has-text("Add")').first().click(); await p.waitForTimeout(800)
-await p.locator('[role=dialog] button:has-text("Routine")').first().click(); await p.waitForTimeout(400)
+await p.locator('[role=dialog] button:has-text("New routine")').click(); await p.waitForTimeout(400)
 const rSheet = await p.locator('[role=dialog]').innerText()
 r.routineModeShowsRepeats = /Repeats/.test(rSheet)
 r.rulePrefilledFromThatDay = /Every day/i.test(rSheet)

@@ -58,13 +58,20 @@ const target = dk(4)
 await p.goto(`${base}/calendar`, { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(1700)
 await p.locator(`[data-day="${target}"]`).click(); await p.waitForTimeout(600)
 await p.locator('button:has-text("Add")').first().click(); await p.waitForTimeout(800)
-r.pickOneChipPresent = (await p.locator('[role=dialog] button:has-text("Pick one")').count()) > 0
-await p.locator('[role=dialog] button:has-text("Pick one")').click(); await p.waitForTimeout(600)
+// the two pickers are separate modes, so each is opened by its own chip
+r.bothPickChipsPresent =
+  (await p.locator('[role=dialog] button:has-text("Pick wishlist")').count()) > 0 &&
+  (await p.locator('[role=dialog] button:has-text("Pick routine")').count()) > 0
+await p.locator('[role=dialog] button:has-text("Pick wishlist")').click(); await p.waitForTimeout(600)
 const listText = await p.locator('[role=dialog]').innerText()
 r.offersUndatedTodos = listText.includes('Book the cabin') && listText.includes('Try the ramen place')
-// the daily routine already lands on every day, so it must NOT be offered here
-r.excludesRoutinesAlreadyOnThatDay = !listText.includes('Morning walk')
 r.excludesDoneTodos = !listText.includes('Finish this one')
+// the wishlist picker is to-dos only; the routine lives behind its own chip
+r.wishlistPickerHasNoRoutines = !listText.includes('Morning walk')
+// and in the ROUTINE picker, a daily routine already lands on this day so it is not offered
+await p.locator('[role=dialog] button:has-text("Pick routine")').click(); await p.waitForTimeout(600)
+r.excludesRoutinesAlreadyOnThatDay = !(await p.locator('[role=dialog]').innerText()).includes('Morning walk')
+await p.locator('[role=dialog] button:has-text("Pick wishlist")').click(); await p.waitForTimeout(600)
 
 // search narrows it
 await p.locator('[role=dialog] input').first().fill('ramen'); await p.waitForTimeout(500)
@@ -85,7 +92,7 @@ r.appearsOnThatDay = (await p.locator('body').innerText()).includes('Book the ca
 const later = dk(9)
 await p.locator(`[data-day="${later}"]`).click(); await p.waitForTimeout(600)
 await p.locator('button:has-text("Add")').first().click(); await p.waitForTimeout(700)
-await p.locator('[role=dialog] button:has-text("Pick one")').click(); await p.waitForTimeout(600)
+await p.locator('[role=dialog] button:has-text("Pick wishlist")').click(); await p.waitForTimeout(600)
 r.showsCurrentDateOnDatedOnes = /now \w{3}, \w{3} \d+/.test(await p.locator('[role=dialog]').innerText())
 await p.locator('[role=dialog] button', { hasText: 'Book the cabin' }).first().click()
 await p.waitForTimeout(1400)
@@ -114,7 +121,7 @@ await p.waitForTimeout(700)
 r.offDayHasNoDateNight = !(await p.locator('body').innerText()).includes('Date night')
 await p.locator('button:has-text("Add")').first().click()
 await p.waitForTimeout(800)
-await p.locator('[role=dialog] button:has-text("Pick one")').click()
+await p.locator('[role=dialog] button:has-text("Pick routine")').click()
 await p.waitForTimeout(700)
 const withRoutines = await p.locator('[role=dialog]').innerText()
 r.offersARoutineOnItsOffDay = withRoutines.includes('Date night')
@@ -137,7 +144,7 @@ r.gotExactlyOneExtraDay = Array.isArray(rule?.extraDates) && rule.extraDates.len
 // and now that it lands there, it must drop out of the picker for that same day
 await p.locator('button:has-text("Add")').first().click()
 await p.waitForTimeout(800)
-await p.locator('[role=dialog] button:has-text("Pick one")').click()
+await p.locator('[role=dialog] button:has-text("Pick routine")').click()
 await p.waitForTimeout(700)
 r.noLongerOfferedForThatDay = !(await p.locator('[role=dialog]').innerText()).includes('Date night')
 

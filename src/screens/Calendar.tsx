@@ -344,7 +344,12 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
   const setLastTodoList = useSession((s) => s.setLastTodoList)
   const dayIso = dayKey(day)
 
-  const [kind, setKind] = useState<'todo' | 'routine' | 'existing'>('todo')
+  /**
+   * Four things this sheet can do, kept as separate modes rather than one "pick existing" list with
+   * headings inside it: what you can pick differs per kind, and so does the reason there might be
+   * nothing to pick, which a shared list cannot say clearly.
+   */
+  const [kind, setKind] = useState<'todo' | 'routine' | 'pickTodo' | 'pickRoutine'>('todo')
   const [query, setQuery] = useState('')
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState<string | null>(null)
@@ -377,6 +382,9 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
     const alreadyHere = list.filter((td) => td.routine && occursOn(td.routine, dayIso)).length
     return { todoPicks, routinePicks, alreadyHere, total: todoPicks.length + routinePicks.length }
   }, [todos, query, dayIso])
+
+  const picking = kind === 'pickTodo' || kind === 'pickRoutine'
+  const rows = kind === 'pickRoutine' ? pickable.routinePicks : kind === 'pickTodo' ? pickable.todoPicks : []
 
   async function assign(todo: Todo) {
     if (todo.routine) {
@@ -422,22 +430,26 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
         title={t('Add to {date}', { date: format(day, 'EEE, MMM d', { locale }) })}
       >
         <div className="space-y-4">
-          <div className="flex gap-2">
+          {/* four chips do not fit a phone width, so the row scrolls like the category rows do */}
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Chip active={kind === 'todo'} onClick={() => setKind('todo')}>
-              {t('To-do')}
+              {t('New to-do')}
             </Chip>
             <Chip active={kind === 'routine'} onClick={() => setKind('routine')}>
-              <Repeat size={14} /> {t('Routine')}
+              <Repeat size={14} /> {t('New routine')}
             </Chip>
-            <Chip active={kind === 'existing'} onClick={() => setKind('existing')}>
-              {t('Pick one')}
+            <Chip active={kind === 'pickTodo'} onClick={() => setKind('pickTodo')}>
+              {t('Pick wishlist')}
+            </Chip>
+            <Chip active={kind === 'pickRoutine'} onClick={() => setKind('pickRoutine')}>
+              <Repeat size={14} /> {t('Pick routine')}
             </Chip>
           </div>
 
-          {kind === 'existing' ? (
+          {picking ? (
             <div>
               <label className="mb-1.5 block text-sm font-bold text-ink-soft">
-                {t('Something you already have')}
+                {kind === 'pickRoutine' ? t('One of your routines') : t('Something on your wishlist')}
               </label>
               <input
                 className="field"
@@ -445,56 +457,43 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
-              {pickable.total === 0 ? (
+              {rows.length === 0 ? (
                 <p className="mt-3 px-1 text-sm text-ink-soft">
                   {/* "nothing to pick" reads as broken when the real reason is that every routine
                       already happens today, which is the normal case for a daily one. */}
                   {query.trim()
                     ? t('Nothing matches that.')
-                    : pickable.alreadyHere > 0
-                      ? t('Everything you have already happens on this day. Remove one with the ⃠ on its row.')
-                      : t('Nothing to pick yet.')}
+                    : kind === 'pickRoutine' && pickable.alreadyHere > 0
+                      ? t('All your routines already happen on this day. Remove one with the ⃠ on its row.')
+                      : kind === 'pickRoutine'
+                        ? t('No routines yet.')
+                        : t('Nothing on your wishlist to pick.')}
                 </p>
               ) : (
                 <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
-                  {pickable.todoPicks.map((td) => (
+                  {rows.map((td) => (
                     <button
                       key={td.id}
                       type="button"
                       onClick={() => assign(td)}
                       className="row flex w-full items-center gap-3 p-3 text-left active:scale-[0.99]"
                     >
+                      {td.routine && <Repeat size={14} className="shrink-0 text-ink-soft" />}
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-semibold text-ink">{td.title}</span>
-                        {/* an existing date means picking this MOVES it, which is worth saying */}
-                        {td.dueAt && (
+                        {td.routine ? (
                           <span className="block text-xs text-ink-soft">
-                            {t('now {date}', { date: format(td.dueAt, 'EEE, MMM d', { locale }) })}
+                            {/* says the rule is untouched, so nobody expects the whole series to move */}
+                            {t('just this day, its repeat stays')}
                           </span>
+                        ) : (
+                          // an existing date means picking this MOVES it, which is worth saying
+                          td.dueAt && (
+                            <span className="block text-xs text-ink-soft">
+                              {t('now {date}', { date: format(td.dueAt, 'EEE, MMM d', { locale }) })}
+                            </span>
+                          )
                         )}
-                      </span>
-                      <Plus size={16} className="shrink-0 text-coral-deep" />
-                    </button>
-                  ))}
-                  {pickable.routinePicks.length > 0 && (
-                    <p className="px-1 pt-2 text-xs font-bold uppercase tracking-wide text-ink-soft">
-                      {t('Routines')}
-                    </p>
-                  )}
-                  {pickable.routinePicks.map((td) => (
-                    <button
-                      key={td.id}
-                      type="button"
-                      onClick={() => assign(td)}
-                      className="row flex w-full items-center gap-3 p-3 text-left active:scale-[0.99]"
-                    >
-                      <Repeat size={14} className="shrink-0 text-ink-soft" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-semibold text-ink">{td.title}</span>
-                        <span className="block text-xs text-ink-soft">
-                          {/* says the rule is untouched, so nobody expects the whole series to move */}
-                          {t('just this day, its repeat stays')}
-                        </span>
                       </span>
                       <Plus size={16} className="shrink-0 text-coral-deep" />
                     </button>

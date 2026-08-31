@@ -37,10 +37,10 @@ r.dailyRoutineShowsOnTheDay = (await p.locator('body').innerText()).includes('Mo
 
 // the picker's empty state must explain itself instead of reading as broken
 await p.locator('button:has-text("Add")').first().click(); await p.waitForTimeout(700)
-await p.locator('[role=dialog] button:has-text("Pick one")').click(); await p.waitForTimeout(600)
+await p.locator('[role=dialog] button:has-text("Pick routine")').click(); await p.waitForTimeout(600)
 const sheet = await p.locator('[role=dialog]').innerText()
-r.emptyStateExplainsWhy = /already happens on this day/.test(sheet)
-r.noLongerSaysNothingToPick = !/Nothing to pick yet/.test(sheet)
+r.emptyStateExplainsWhy = /already happen on this day/.test(sheet)
+r.noLongerSaysNothingToPick = !/No routines yet/.test(sheet)
 await p.keyboard.press('Escape'); await p.waitForTimeout(700)
 
 // remove it from THIS day only
@@ -62,7 +62,7 @@ r.stillOnTheDayAfter = (await p.locator('body').innerText()).includes('Morning w
 // and now that it is off that day, the picker offers it again there
 await p.locator(`[data-day="${day}"]`).click(); await p.waitForTimeout(700)
 await p.locator('button:has-text("Add")').first().click(); await p.waitForTimeout(700)
-await p.locator('[role=dialog] button:has-text("Pick one")').click(); await p.waitForTimeout(600)
+await p.locator('[role=dialog] button:has-text("Pick routine")').click(); await p.waitForTimeout(600)
 r.offeredAgainAfterRemoval = (await p.locator('[role=dialog]').innerText()).includes('Morning walk')
 if (r.offeredAgainAfterRemoval) {
   await p.locator('[role=dialog] button', { hasText: 'Morning walk' }).first().click()
