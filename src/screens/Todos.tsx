@@ -18,6 +18,7 @@ import { haptic } from '../lib/haptics'
 import { useT } from '../lib/i18n'
 import { openNavigation } from '../lib/navlinks'
 import { dayKeyOf, localOccurrenceInstant } from '../lib/recurrence'
+import { defaultTodoList } from '../lib/taxonomy'
 import { PARTNER_COLORS, partnerName } from '../lib/partners'
 import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
@@ -752,13 +753,15 @@ function TodoComposer({ groups }: { groups: TodoGroup[] }) {
   const [note, setNote] = useState('')
   const [showNote, setShowNote] = useState(false)
   const [addCat, setAddCat] = useState<string | null>(null)
+  const lastTodoList = useSession((s) => s.lastTodoList)
+  const setLastTodoList = useSession((s) => s.setLastTodoList)
   const [showDue, setShowDue] = useState(false)
   const [due, setDue] = useState('')
   const [creating, setCreating] = useState(false)
   const [newCat, setNewCat] = useState('')
 
   const groupList = groups
-  const target = addCat ?? groupList[0]?.id ?? 'other'
+  const target = defaultTodoList(groupList, lastTodoList, addCat)
 
   async function add() {
     const text = title.trim()
@@ -770,6 +773,7 @@ function TodoComposer({ groups }: { groups: TodoGroup[] }) {
       addedBy: activePartner,
       dueAt: showDue ? fromDateInput(due) : undefined,
     })
+    setLastTodoList(target)
     setTitle('')
     setNote('')
     setShowNote(false)

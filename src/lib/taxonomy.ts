@@ -24,6 +24,24 @@ export const TODO_CATEGORY_ORDER: TodoCategory[] = ['food', 'movie', 'game', 'tr
  */
 export const ROUTINE_CATEGORY = 'routine'
 
+/**
+ * Which list a new to-do should default to: what you picked in this sheet, else the one you used
+ * last, else the first group.
+ *
+ * The remembered id is checked against the groups that currently exist, because a list can be
+ * deleted after being remembered, and filing a to-do under a category that is gone would hide it
+ * from every chip and filter.
+ */
+export function defaultTodoList(
+  groups: { id: string }[],
+  remembered: string | null,
+  picked: string | null = null,
+): string {
+  if (picked) return picked
+  if (remembered && groups.some((g) => g.id === remembered)) return remembered
+  return groups[0]?.id ?? 'other'
+}
+
 // Daily check-in 1–5 mood scale (distinct from memory MOODS).
 export const DAILY_MOODS: { value: number; emoji: string; label: string }[] = [
   { value: 1, emoji: '😔', label: 'Low' },

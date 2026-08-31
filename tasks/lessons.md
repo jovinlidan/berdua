@@ -402,3 +402,19 @@ Here the drag helper started returning the position captured at the moment of re
 movement checks kept their meaning. Also watch the ordering: a preceding tap left the care sheet open
 over the pet, so the next drags hit the sheet and read as "no movement" for a completely unrelated
 reason.
+
+## 2026-08-20: ensureDefaultTodoGroups reseeds, so you cannot test a deleted built-in list
+**Context:** A remembered to-do list needed a fallback for the case where that list has since been
+deleted, since filing a to-do under a category that no longer exists hides it from every chip and
+filter. The browser test deleted the group straight out of IndexedDB, reloaded, and found four
+groups still there including the one just deleted: the app reseeds the built-in lists on load, so
+the scenario undid itself and the assertion failed while the code was correct.
+
+**Lesson:** A test that deletes seeded data is testing the seeder, not the feature. Only a CUSTOM
+group stays deleted; the built-in four always come back.
+
+**How to apply:** Push that kind of case down to the pure function. `defaultTodoList(groups,
+remembered, picked)` takes the list of groups as an argument, so "remembered id is not in the list"
+is one line in a unit test and needs no browser at all. Keep the end-to-end test for the wiring it
+can actually prove (the memory surviving a reload and being shared between two screens) and say in
+its header what it deliberately does not cover, so the gap does not look like an oversight later.

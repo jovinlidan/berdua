@@ -43,6 +43,15 @@ interface SessionState {
   /** Newest received "thinking of you" ping this device has seen (per-device, drives the unread dot). */
   lastSeenThinkingAt: number
   setLastSeenThinking: (ts: number) => void
+
+  /**
+   * The list a to-do was last filed under, so both places that create one open on it instead of
+   * snapping back to whichever group happens to sort first. Per-device: which list you reach for is
+   * a habit, not something to impose on your partner. Read it through `defaultTodoList`, which
+   * drops the id if that group has since been deleted.
+   */
+  lastTodoList: string | null
+  setLastTodoList: (id: string) => void
 }
 
 export const useSession = create<SessionState>()(
@@ -87,6 +96,9 @@ export const useSession = create<SessionState>()(
             ? s.collapsedTodoGroups.filter((x) => x !== id)
             : [...s.collapsedTodoGroups, id],
         })),
+
+      lastTodoList: null,
+      setLastTodoList: (id) => set({ lastTodoList: id }),
 
       lastSeenThinkingAt: 0,
       setLastSeenThinking: (ts) =>

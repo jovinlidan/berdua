@@ -28,7 +28,7 @@ import { DAY_REMINDER_HOUR, formatTime } from '../lib/dates'
 import { haptic } from '../lib/haptics'
 import { activeDateLocale, useT } from '../lib/i18n'
 import { localOccurrenceInstant, routineSummary } from '../lib/recurrence'
-import { ROUTINE_CATEGORY } from '../lib/taxonomy'
+import { ROUTINE_CATEGORY, defaultTodoList } from '../lib/taxonomy'
 import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
 import type { PartnerKey, Routine } from '../types'
@@ -330,6 +330,8 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
   const locale = activeDateLocale()
   const groups = useTodoGroups()
   const activePartner = useSession((s) => s.activePartner)
+  const lastTodoList = useSession((s) => s.lastTodoList)
+  const setLastTodoList = useSession((s) => s.setLastTodoList)
   const dayIso = dayKey(day)
 
   const [kind, setKind] = useState<'todo' | 'routine'>('todo')
@@ -340,7 +342,7 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
   const [rulesOpen, setRulesOpen] = useState(false)
 
   const groupList = groups ?? []
-  const target = category ?? groupList[0]?.id ?? 'other'
+  const target = defaultTodoList(groupList, lastTodoList, category)
 
   async function add() {
     const text = title.trim()
@@ -356,6 +358,7 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
         // the same 09:00 the wishlist uses, so a day picked here behaves like one picked there
         dueAt: localOccurrenceInstant(dayIso, DAY_REMINDER_HOUR),
       })
+      setLastTodoList(target)
       toast(t('Added to {date}', { date: format(day, 'MMM d', { locale }) }), '\u{2705}')
     }
     haptic(8)
