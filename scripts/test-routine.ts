@@ -15,10 +15,13 @@ import {
   occurrenceInstant,
   occurrenceKeys,
   occurrenceTotal,
+  occurrenceOrdinal,
   occursOn,
   routineActiveKey,
+  routineExtraDates,
   routineProgress,
   routineStreak,
+  withinLimits,
   routineSummary,
   sameRoutineLog,
   toRRule,
@@ -451,5 +454,93 @@ ok('switching back on resumes the same rule and keeps the history')
 assert.equal(occursOn({ ...rule(), paused: true }, '2026-06-11'), false)
 assert.deepEqual(occurrenceKeys({ ...rule(), paused: true }, '2026-06-01', '2026-06-20'), [])
 ok('paused with no pause date hides everything, the safer reading of switched off')
+
+// ── one-off added days ────────────────────────────────────────────────────────────────────────
+// Putting a routine on a single extra day must not disturb the rule: the whole point is that a
+// Tuesday routine can happen on one Thursday without moving every other Tuesday or renumbering the
+// occurrences that `count` and the progress figures are built on.
+const weeklyTue = rule({ freq: 'weekly', interval: 1, startDate: '2026-06-02' }) // a Tuesday
+const withExtra = { ...weeklyTue, extraDates: ['2026-06-11'] } as Routine // a Thursday
+
+assert.equal(occursOn(weeklyTue, '2026-06-11'), false)
+assert.equal(occursOn(withExtra, '2026-06-11'), true)
+ok('an added day occurs even though the rule does not land on it')
+
+assert.deepEqual(occurrenceKeys(weeklyTue, '2026-06-01', '2026-06-14'), ['2026-06-02', '2026-06-09'])
+assert.deepEqual(occurrenceKeys(withExtra, '2026-06-01', '2026-06-14'), [
+  '2026-06-02',
+  '2026-06-09',
+  '2026-06-11',
+])
+ok('an added day is merged into expansion in date order, leaving the rule days alone')
+
+assert.equal(occurrenceOrdinal(withExtra, '2026-06-09'), 2)
+ok('adding a day does NOT renumber the rule occurrences around it')
+
+// added days sit outside the counted series: a person named the day, so limits do not veto it
+const capped = { ...rule({ count: 2 }), extraDates: ['2026-07-01'] } as Routine
+assert.deepEqual(occurrenceKeys(capped, '2026-06-01', '2026-07-05'), [
+  '2026-06-01',
+  '2026-06-02',
+  '2026-07-01',
+])
+ok('an added day survives a count limit that has already run out')
+
+const ended = { ...rule({ until: '2026-06-03' }), extraDates: ['2026-06-20'] } as Routine
+assert.deepEqual(occurrenceKeys(ended, '2026-06-01', '2026-06-30'), [
+  '2026-06-01',
+  '2026-06-02',
+  '2026-06-03',
+  '2026-06-20',
+])
+ok('an added day survives an `until` that has already passed')
+
+// but switching the routine off still hides everything, added days included
+const offWithExtra = { ...rule({ paused: true, pausedAt: '2026-06-05' }), extraDates: ['2026-06-20'] } as Routine
+assert.equal(occursOn(offWithExtra, '2026-06-20'), false)
+assert.deepEqual(occurrenceKeys(offWithExtra, '2026-06-01', '2026-06-30'), ['2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04'])
+ok('a switched-off routine hides its added days too')
+
+// a tick on an added day must count, and the plan must grow to match
+const extraTicked = routineTodo({
+  routine: { ...rule({ count: 2 }), extraDates: ['2026-07-01'] } as Routine,
+  routineLog: {
+    '2026-06-01': { done: true, at: 1, by: 'A' },
+    '2026-07-01': { done: true, at: 2, by: 'B' },
+  },
+})
+assert.equal(withinLimits(extraTicked.routine!, '2026-07-01'), true)
+assert.deepEqual(routineProgress(extraTicked), { done: 2, total: 3 })
+ok('a tick on an added day counts, and a finite plan grows by the days added to it')
+
+// garbage in the list must not reach anything downstream
+const messy = { ...rule(), extraDates: ['2026-06-11', '2026-06-11', 'nope', '2026-13-45'] } as Routine
+assert.deepEqual(routineExtraDates(messy), ['2026-06-11'])
+ok('the added-days list is deduped and stripped of anything that is not a real day')
+
+// Two offline phones each adding a DIFFERENT day must both survive. The rule is last-write-wins
+// like any other edit, but this list is two people appending, which is the same trap the tick log
+// exists for: whole-record LWW would silently drop one of the days.
+const baseRule = rule({ freq: 'weekly', startDate: '2026-06-02' })
+const phoneA = routineTodo({ routine: { ...baseRule, extraDates: ['2026-06-11'] } as Routine, updatedAt: 100 })
+const phoneB = routineTodo({ routine: { ...baseRule, extraDates: ['2026-06-13'] } as Routine, updatedAt: 200 })
+let mergedDoc = mergeDocs(stored({ todos: [phoneA] }), shot({ todos: [phoneB] }), NOW)
+assert.deepEqual(mergedDoc.todos[0].routine?.extraDates, ['2026-06-11', '2026-06-13'])
+ok('both phones\' added days survive the merge, in date order')
+
+// and merging is idempotent, so a re-push does not duplicate them
+mergedDoc = mergeDocs(mergedDoc, shot({ todos: [mergedDoc.todos[0]] }), NOW)
+assert.deepEqual(mergedDoc.todos[0].routine?.extraDates, ['2026-06-11', '2026-06-13'])
+ok('re-pushing the same added days changes nothing')
+
+// the newer rule still wins; only the list is unioned
+const changedRule = routineTodo({
+  routine: { ...rule({ freq: 'daily' }), extraDates: ['2026-06-20'] } as Routine,
+  updatedAt: 300,
+})
+mergedDoc = mergeDocs(mergedDoc, shot({ todos: [changedRule] }), NOW)
+assert.equal(mergedDoc.todos[0].routine?.freq, 'daily')
+assert.deepEqual(mergedDoc.todos[0].routine?.extraDates, ['2026-06-11', '2026-06-13', '2026-06-20'])
+ok('a newer rule wins while the added days from both sides are kept')
 
 console.log(`\nAll ${n} routine checks passed ✅`)

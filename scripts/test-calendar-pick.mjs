@@ -1,10 +1,13 @@
 // The calendar's add sheet can also pick something already on the wishlist and give it that date,
 // rather than only creating from scratch.
 //
-// Only TO-DOS are offered, deliberately. A routine is already on its own days, so "add it to this
-// date" has no honest meaning: repointing its startDate would move every day it lands on and
-// renumber its occurrences, and a one-off extra day is not something the rule can express. Done
-// to-dos are left out too, since dating a finished task achieves nothing.
+// Both kinds are offered, and each has a reason to be left OUT:
+//   a to-do already ticked off, because dating a finished task achieves nothing;
+//   a routine that already lands on this day, because picking it would be a silent no-op.
+//
+// Picking a routine adds ONE day to it and leaves the rule alone, so a weekly routine can happen on
+// an off day without moving every other occurrence. The engine side of that is pinned by
+// scripts/test-routine.ts; this covers the wiring.
 //
 // Needs `pnpm dev`. Run: BASE=http://localhost:5173 node scripts/test-calendar-pick.mjs
 import { chromium } from 'playwright'
@@ -59,7 +62,8 @@ r.pickOneChipPresent = (await p.locator('[role=dialog] button:has-text("Pick one
 await p.locator('[role=dialog] button:has-text("Pick one")').click(); await p.waitForTimeout(600)
 const listText = await p.locator('[role=dialog]').innerText()
 r.offersUndatedTodos = listText.includes('Book the cabin') && listText.includes('Try the ramen place')
-r.excludesRoutines = !listText.includes('Morning walk')
+// the daily routine already lands on every day, so it must NOT be offered here
+r.excludesRoutinesAlreadyOnThatDay = !listText.includes('Morning walk')
 r.excludesDoneTodos = !listText.includes('Finish this one')
 
 // search narrows it
@@ -88,6 +92,55 @@ await p.waitForTimeout(1400)
 const moved = await dueOf('Book the cabin')
 console.log('after moving:', JSON.stringify(moved), 'target', later)
 r.movesADatedTodo = moved?.day === later
+// ── a routine that does NOT land on that day can be picked, and only that day changes ──────────
+// A weekly routine starting today lands on this weekday only, so a day 3 out is an off day for it.
+await p.goto(`${base}/routines`, { waitUntil: 'domcontentloaded' })
+await p.waitForSelector('input[placeholder="Add a routine…"]')
+await p.locator('button.chip').first().click()
+await p.waitForTimeout(700)
+await p.locator('[role=dialog] >> text=Weekly').first().click()
+await p.waitForTimeout(400)
+await p.locator('[role=dialog] button:has-text("Save")').first().click()
+await p.waitForTimeout(700)
+await p.fill('input[placeholder="Add a routine…"]', 'Date night')
+await p.click('[aria-label="Add routine"]')
+await p.waitForTimeout(900)
+
+const offDay = dk(3)
+await p.goto(`${base}/calendar`, { waitUntil: 'domcontentloaded' })
+await p.waitForTimeout(1700)
+await p.locator(`[data-day="${offDay}"]`).click()
+await p.waitForTimeout(700)
+r.offDayHasNoDateNight = !(await p.locator('body').innerText()).includes('Date night')
+await p.locator('button:has-text("Add")').first().click()
+await p.waitForTimeout(800)
+await p.locator('[role=dialog] button:has-text("Pick one")').click()
+await p.waitForTimeout(700)
+const withRoutines = await p.locator('[role=dialog]').innerText()
+r.offersARoutineOnItsOffDay = withRoutines.includes('Date night')
+r.saysTheRepeatStays = /repeat stays/.test(withRoutines)
+await p.locator('[role=dialog] button', { hasText: 'Date night' }).first().click()
+await p.waitForTimeout(1500)
+r.routineNowOnThatDay = (await p.locator('body').innerText()).includes('Date night')
+
+// the rule itself must be untouched: one extra day, same weekly repeat
+const rule = await p.evaluate(async () => {
+  const db = await new Promise((res) => { const q = indexedDB.open('berdua'); q.onsuccess = () => res(q.result) })
+  const rows = await new Promise((res) => { const g = db.transaction('todos','readonly').objectStore('todos').getAll(); g.onsuccess = () => res(g.result) })
+  return rows.find((x) => x.title === 'Date night')?.routine ?? null
+})
+console.log('routine rule after picking:', JSON.stringify(rule))
+r.ruleStillWeekly = rule?.freq === 'weekly'
+r.startDateUntouched = rule?.startDate === dk(0)
+r.gotExactlyOneExtraDay = Array.isArray(rule?.extraDates) && rule.extraDates.length === 1 && rule.extraDates[0] === offDay
+
+// and now that it lands there, it must drop out of the picker for that same day
+await p.locator('button:has-text("Add")').first().click()
+await p.waitForTimeout(800)
+await p.locator('[role=dialog] button:has-text("Pick one")').click()
+await p.waitForTimeout(700)
+r.noLongerOfferedForThatDay = !(await p.locator('[role=dialog]').innerText()).includes('Date night')
+
 console.log(JSON.stringify(r, null, 2))
 console.log('errors:', errs.length ? errs : 'none')
 const pass = Object.values(r).every(Boolean) && errs.length === 0

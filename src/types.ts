@@ -105,6 +105,15 @@ export interface Routine {
    * on them, and only this day onwards stops being expected.
    */
   pausedAt?: string
+  /**
+   * One-off days this routine also happens on (ISO yyyy-mm-dd), added by hand from the calendar.
+   *
+   * The rule stays untouched, which is the point: putting a Tuesday routine on one Thursday must not
+   * move every other Tuesday or renumber the occurrences that `count` and the progress figures are
+   * built on. These days sit OUTSIDE the counted series, so they ignore `until` and `count` (a person
+   * said this day explicitly) but a switched-off routine still shows nothing.
+   */
+  extraDates?: string[]
 }
 
 /**

@@ -23,11 +23,11 @@ import { PageHeader } from '../components/PageHeader'
 import { RoutineSheet } from '../components/RoutineSheet'
 import { useToast } from '../components/Toast'
 import { useCalendarEvents, useCouple, useTodoGroups, useTodos, type CalendarEvent, type CalendarEventType } from '../db/hooks'
-import { addTodo, toggleRoutineOccurrence, updateTodo } from '../db/repo'
+import { addRoutineDate, addTodo, toggleRoutineOccurrence, updateTodo } from '../db/repo'
 import { DAY_REMINDER_HOUR, formatTime } from '../lib/dates'
 import { haptic } from '../lib/haptics'
 import { activeDateLocale, useT } from '../lib/i18n'
-import { localOccurrenceInstant, routineSummary } from '../lib/recurrence'
+import { localOccurrenceInstant, occursOn, routineSummary } from '../lib/recurrence'
 import { ROUTINE_CATEGORY, defaultTodoList } from '../lib/taxonomy'
 import { downloadTodoIcs } from '../lib/todoIcs'
 import { useSession } from '../store/useSession'
@@ -346,22 +346,38 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
   const groupList = groups ?? []
   const target = defaultTodoList(groupList, lastTodoList, category)
 
-  // Only to-dos are offered. A routine is already on its own days, so "add it to this date" has no
-  // honest meaning: repointing its startDate would move every day it lands on and renumber its
-  // occurrences, and a one-off extra day is not something the rule can express.
+  /**
+   * What can be dropped onto this day. Two kinds, and each has a reason to be left out:
+   *
+   * A to-do that is already ticked off, because dating a finished task achieves nothing.
+   *
+   * A routine that ALREADY lands on this day, because picking it would be a silent no-op. That
+   * covers both a rule that reaches the day and a one-off day already added to it.
+   */
   const pickable = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return (todos ?? [])
-      .filter((td) => !td.routine && !td.done && (!q || td.title.toLowerCase().includes(q)))
+    const matches = (title: string) => !q || title.toLowerCase().includes(q)
+    const list = (todos ?? []).filter((td) => matches(td.title))
+    const todoPicks = list
+      .filter((td) => !td.routine && !td.done)
       // undated first: giving a date to something that has none is the common case, and moving one
       // that already has a date is the rarer, more deliberate act
       .sort((a, b) => (a.dueAt ? 1 : 0) - (b.dueAt ? 1 : 0))
-  }, [todos, query])
+    const routinePicks = list.filter((td) => td.routine && !occursOn(td.routine, dayIso))
+    return { todoPicks, routinePicks, total: todoPicks.length + routinePicks.length }
+  }, [todos, query, dayIso])
 
   async function assign(todo: Todo) {
-    await updateTodo(todo.id, { dueAt: localOccurrenceInstant(dayIso, DAY_REMINDER_HOUR) })
+    if (todo.routine) {
+      // The rule is untouched: this adds one extra day, so a Tuesday routine can happen on a
+      // Thursday without moving every other Tuesday.
+      await addRoutineDate(todo.id, dayIso)
+      toast(t('Added to {date}', { date: format(day, 'MMM d', { locale }) }), '\u{1F501}')
+    } else {
+      await updateTodo(todo.id, { dueAt: localOccurrenceInstant(dayIso, DAY_REMINDER_HOUR) })
+      toast(t('Added to {date}', { date: format(day, 'MMM d', { locale }) }), '\u{2705}')
+    }
     haptic(8)
-    toast(t('Added to {date}', { date: format(day, 'MMM d', { locale }) }), '\u{2705}')
     onClose()
   }
 
@@ -410,7 +426,7 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
           {kind === 'existing' ? (
             <div>
               <label className="mb-1.5 block text-sm font-bold text-ink-soft">
-                {t('Something already on your wishlist')}
+                {t('Something you already have')}
               </label>
               <input
                 className="field"
@@ -418,13 +434,13 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
-              {pickable.length === 0 ? (
+              {pickable.total === 0 ? (
                 <p className="mt-3 px-1 text-sm text-ink-soft">
-                  {query.trim() ? t('Nothing matches that.') : t('Nothing on the wishlist to pick yet.')}
+                  {query.trim() ? t('Nothing matches that.') : t('Nothing to pick yet.')}
                 </p>
               ) : (
                 <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
-                  {pickable.map((td) => (
+                  {pickable.todoPicks.map((td) => (
                     <button
                       key={td.id}
                       type="button"
@@ -439,6 +455,29 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
                             {t('now {date}', { date: format(td.dueAt, 'EEE, MMM d', { locale }) })}
                           </span>
                         )}
+                      </span>
+                      <Plus size={16} className="shrink-0 text-coral-deep" />
+                    </button>
+                  ))}
+                  {pickable.routinePicks.length > 0 && (
+                    <p className="px-1 pt-2 text-xs font-bold uppercase tracking-wide text-ink-soft">
+                      {t('Routines')}
+                    </p>
+                  )}
+                  {pickable.routinePicks.map((td) => (
+                    <button
+                      key={td.id}
+                      type="button"
+                      onClick={() => assign(td)}
+                      className="row flex w-full items-center gap-3 p-3 text-left active:scale-[0.99]"
+                    >
+                      <Repeat size={14} className="shrink-0 text-ink-soft" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold text-ink">{td.title}</span>
+                        <span className="block text-xs text-ink-soft">
+                          {/* says the rule is untouched, so nobody expects the whole series to move */}
+                          {t('just this day, its repeat stays')}
+                        </span>
                       </span>
                       <Plus size={16} className="shrink-0 text-coral-deep" />
                     </button>

@@ -155,8 +155,35 @@ export function normalizeRoutine(routine: Routine): Routine {
     // Clamped to what expansion can enumerate, so `occurrenceTotal` can never promise more
     // occurrences than `occurrenceKeys` will ever hand back.
     count: routine.count && routine.count > 0 ? Math.min(MAX_OCCURRENCES, Math.floor(routine.count)) : null,
+    extraDates: sanitizeExtraDates(routine.extraDates),
   }
 }
+
+/** Valid, deduped, sorted day keys, or undefined when there are none. */
+function sanitizeExtraDates(dates: string[] | undefined): string[] | undefined {
+  if (!dates?.length) return undefined
+  const clean = [...new Set(dates.filter(isDayKey))].sort()
+  return clean.length ? clean : undefined
+}
+
+/**
+ * Both phones' added days, unioned.
+ *
+ * The rule itself is last-write-wins like any other edit, but this list is not an edit: it is two
+ * people each appending days. Under LWW, Alex adding Thursday and Bea adding Saturday while both are
+ * offline would lose one of them, the same trap `mergeRoutineLogs` exists for.
+ *
+ * A union means a REMOVAL cannot propagate: nothing removes an added day today (the calendar only
+ * ever appends, idempotently), so if that ever changes this needs per-day tombstones like the ticks.
+ */
+export function mergeExtraDates(a: string[] | undefined, b: string[] | undefined): string[] | undefined {
+  if (!a?.length) return sanitizeExtraDates(b)
+  if (!b?.length) return sanitizeExtraDates(a)
+  return sanitizeExtraDates([...a, ...b])
+}
+
+/** The one-off days a routine also happens on, already sanitised. */
+export const routineExtraDates = (routine: Routine): string[] => sanitizeExtraDates(routine.extraDates) ?? []
 
 /** Which weekdays a weekly routine lands on (falls back to the start day's own weekday). */
 export const routineWeekdays = (routine: Routine): number[] =>
@@ -231,7 +258,10 @@ export function occurrenceOrdinal(routine: Routine, key: DayKey): number | null 
 export function occursOn(routine: Routine, key: DayKey): boolean {
   if (pausedFrom(routine, key)) return false
   const r = normalizeRoutine(routine)
-  if (!isDayKey(key) || !isDayKey(r.startDate)) return false
+  if (!isDayKey(key)) return false
+  // an explicitly added day happens even where the rule does not reach
+  if (routineExtraDates(r).includes(key)) return true
+  if (!isDayKey(r.startDate)) return false
   return hits(r, key)
 }
 
@@ -273,7 +303,15 @@ export function occurrenceKeys(
     }
     key = addDaysKey(key, 1)
   }
-  return out
+
+  // Days added by hand sit outside the counted series, so they are merged in here rather than being
+  // walked with the rule: they ignore `until` and `count` (a person named the day) but not the pause,
+  // and `toKey` still bounds them because the caller only asked about this window.
+  const extras = routineExtraDates(r).filter(
+    (d) => d >= fromKey && d <= toKey && !(stop !== null && d > stop) && !out.includes(d),
+  )
+  if (!extras.length) return out
+  return [...out, ...extras].sort().slice(0, cap)
 }
 
 /** The first occurrence on or after `fromKey`, or null when the routine has run out. */
@@ -288,15 +326,18 @@ export function nextOccurrenceKey(routine: Routine, fromKey: DayKey): DayKey | n
  */
 export function occurrenceTotal(routine: Routine): number | null {
   const r = normalizeRoutine(routine)
-  if (r.count) return r.count
-  if (!r.until || r.until < r.startDate) return r.until ? 0 : null
+  // Added days are extra planned days, so a finite plan grows by however many are not already part
+  // of the series. Without this, ticking one could report more done than the total.
+  const extra = routineExtraDates(r).filter((d) => !inCountedSeries(r, d)).length
+  if (r.count) return r.count + extra
+  if (!r.until || r.until < r.startDate) return r.until ? extra : null
   // Any legal rule repeats at least once a year, so the last occurrence is within 366 days of the
   // end; walking back from there is bounded no matter how long the series is.
   for (let key = r.until, i = 0; i <= 366 && key >= r.startDate; i++, key = addDaysKey(key, -1)) {
     const ordinal = occurrenceOrdinal(r, key)
-    if (ordinal !== null) return ordinal
+    if (ordinal !== null) return ordinal + extra
   }
-  return 0
+  return extra
 }
 
 // ── Per-occurrence ticks ───────────────────────────────────────────────────────
@@ -354,13 +395,28 @@ export function routineActiveKey(routine: Routine, todayKey: DayKey): DayKey | n
 }
 
 /** Is that day inside the routine's own start/until/count bounds? */
-export function withinLimits(routine: Routine, key: DayKey): boolean {
-  const r = normalizeRoutine(routine)
-  if (key < r.startDate) return false
+/**
+ * Is `key` an occurrence of the RULE itself, honouring `startDate`, `until` and `count`?
+ *
+ * Deliberately blind to the added-days list, so it can answer "was this day already covered" for
+ * the two callers that need to know: `withinLimits`, which then also accepts an added day, and
+ * `occurrenceTotal`, which counts how many added days are genuinely extra. Asking `hits` instead is
+ * wrong, because a daily rule's arithmetic lands on every day including ones past its `count`.
+ */
+function inCountedSeries(r: Routine, key: DayKey): boolean {
+  if (!isDayKey(r.startDate) || key < r.startDate) return false
   if (r.until && key > r.until) return false
+  if (!hits(r, key)) return false
   if (!r.count) return true
   const ordinal = occurrenceOrdinal(r, key)
   return ordinal !== null && ordinal <= r.count
+}
+
+export function withinLimits(routine: Routine, key: DayKey): boolean {
+  const r = normalizeRoutine(routine)
+  // an added day is always "within": it was named explicitly, so a tick on it must count
+  if (routineExtraDates(r).includes(key)) return true
+  return inCountedSeries(r, key)
 }
 
 /** Ticked-off occurrences against the plan. `total` is null for an open-ended routine. */

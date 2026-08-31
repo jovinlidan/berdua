@@ -1,4 +1,4 @@
-import { mergeRoutineLogs } from '../../src/lib/recurrence.js'
+import { mergeExtraDates, mergeRoutineLogs } from '../../src/lib/recurrence.js'
 import type {
   BucketItem,
   Couple,
@@ -91,7 +91,11 @@ function mergeTodos(a: Todo[], b: Todo[], tombstones: Tombstone[]): Todo[] {
     }
     const newest = r.updatedAt > existing.updatedAt ? r : existing
     const routineLog = mergeRoutineLogs(existing.routineLog, r.routineLog)
-    map.set(r.id, routineLog ? { ...newest, routineLog } : newest)
+    // The rule is last-write-wins like any other edit, but the days added BY HAND are appended
+    // independently on each phone, so they are unioned onto whichever rule won.
+    const extraDates = mergeExtraDates(existing.routine?.extraDates, r.routine?.extraDates)
+    const routine = newest.routine ? { ...newest.routine, extraDates } : undefined
+    map.set(r.id, { ...newest, ...(routineLog ? { routineLog } : {}), ...(newest.routine ? { routine } : {}) })
   }
   return dropDeleted([...map.values()], tombstones, 'todos')
 }

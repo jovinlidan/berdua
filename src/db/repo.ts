@@ -326,6 +326,20 @@ export async function setRoutinePaused(id: string, paused: boolean): Promise<voi
   await updateTodo(id, { routine })
 }
 
+/**
+ * Also happen on this one day, without touching the rule.
+ *
+ * Used by the calendar to drop a routine onto a day it would not otherwise land on. Idempotent, so
+ * picking the same day twice is a no-op rather than a duplicate.
+ */
+export async function addRoutineDate(id: string, dayKey: string): Promise<void> {
+  const todo = await db.todos.get(id)
+  if (!todo?.routine) return
+  const existing = todo.routine.extraDates ?? []
+  if (existing.includes(dayKey)) return
+  await updateTodo(id, { routine: { ...todo.routine, extraDates: [...existing, dayKey].sort() } })
+}
+
 /** Stop repeating. The tick history stays, so re-enabling the routine brings its streak back. */
 export async function clearTodoRoutine(id: string): Promise<void> {
   await updateTodo(id, { routine: undefined })

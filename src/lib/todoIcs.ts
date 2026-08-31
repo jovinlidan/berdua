@@ -2,7 +2,14 @@
 // own calendar app. Kept out of lib/calendar.ts on purpose: that module must stay free of relative
 // imports so scripts/test-ics.mjs can keep running it under plain `node`.
 import { type DateIcsInput, downloadDateIcs } from './calendar'
-import { localTzOffset, nextOccurrenceKey, normalizeRoutine, occurrenceInstant, toRRule } from './recurrence'
+import {
+  localTzOffset,
+  nextOccurrenceKey,
+  normalizeRoutine,
+  occurrenceInstant,
+  routineExtraDates,
+  toRRule,
+} from './recurrence'
 import type { Todo } from '../types'
 
 /**
@@ -23,6 +30,7 @@ export function todoIcsInput(todo: Todo): DateIcsInput | null {
       durationMin: 60,
       allDay: !routine.time, // a routine with no time of day is an all-day series
       rrule: toRRule(routine, { dateOnlyUntil: !routine.time }),
+      rdates: routineExtraDates(routine),
       location,
       description,
       alarmMinutesBefore: 30,
