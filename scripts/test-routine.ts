@@ -19,6 +19,7 @@ import {
   occursOn,
   routineActiveKey,
   routineExtraDates,
+  routineSkipDates,
   routineProgress,
   routineStreak,
   withinLimits,
@@ -542,5 +543,61 @@ mergedDoc = mergeDocs(mergedDoc, shot({ todos: [changedRule] }), NOW)
 assert.equal(mergedDoc.todos[0].routine?.freq, 'daily')
 assert.deepEqual(mergedDoc.todos[0].routine?.extraDates, ['2026-06-11', '2026-06-13', '2026-06-20'])
 ok('a newer rule wins while the added days from both sides are kept')
+
+// ── one-off removed days ──────────────────────────────────────────────────────────────────────
+// The mirror of an added day: drop ONE occurrence off the calendar while the repeat carries on.
+const daily = rule()
+const skipped = { ...daily, skipDates: ['2026-06-03'] } as Routine
+
+assert.equal(occursOn(daily, '2026-06-03'), true)
+assert.equal(occursOn(skipped, '2026-06-03'), false)
+ok('a removed day stops happening even though the rule lands on it')
+
+assert.deepEqual(occurrenceKeys(skipped, '2026-06-01', '2026-06-05'), [
+  '2026-06-01',
+  '2026-06-02',
+  '2026-06-04',
+  '2026-06-05',
+])
+ok('a removed day is dropped from expansion, leaving the days around it alone')
+
+assert.equal(occurrenceOrdinal(skipped, '2026-06-04'), 4)
+ok('removing a day does NOT renumber the occurrences after it')
+
+// a removal beats an addition, so the two can never disagree about the same day
+const both = { ...daily, extraDates: ['2026-06-03'], skipDates: ['2026-06-03'] } as Routine
+assert.equal(occursOn(both, '2026-06-03'), false)
+assert.deepEqual(occurrenceKeys(both, '2026-06-01', '2026-06-04'), ['2026-06-01', '2026-06-02', '2026-06-04'])
+ok('if a day is somehow both added and removed, removed wins')
+
+// a tick left behind on a removed day stops counting, and the plan shrinks to match
+const skippedTicked = routineTodo({
+  routine: { ...rule({ count: 3 }), skipDates: ['2026-06-02'] } as Routine,
+  routineLog: {
+    '2026-06-01': { done: true, at: 1, by: 'A' },
+    '2026-06-02': { done: true, at: 2, by: 'A' },
+  },
+})
+assert.equal(withinLimits(skippedTicked.routine!, '2026-06-02'), false)
+assert.deepEqual(routineProgress(skippedTicked), { done: 1, total: 2 })
+ok('a tick on a removed day stops counting, and a finite plan shrinks by it')
+
+assert.deepEqual(routineSkipDates({ ...daily, skipDates: ['2026-06-03', '2026-06-03', 'junk'] } as Routine), [
+  '2026-06-03',
+])
+ok('the removed-days list is deduped and stripped of anything that is not a real day')
+
+// both phones' removals survive, and a removal on one side beats an addition on the other
+const remA = routineTodo({ routine: { ...daily, skipDates: ['2026-06-03'] } as Routine, updatedAt: 100 })
+const remB = routineTodo({ routine: { ...daily, skipDates: ['2026-06-05'] } as Routine, updatedAt: 200 })
+let remDoc = mergeDocs(stored({ todos: [remA] }), shot({ todos: [remB] }), NOW)
+assert.deepEqual(remDoc.todos[0].routine?.skipDates, ['2026-06-03', '2026-06-05'])
+ok("both phones' removed days survive the merge")
+
+const addsIt = routineTodo({ routine: { ...daily, extraDates: ['2026-06-03'] } as Routine, updatedAt: 300 })
+remDoc = mergeDocs(remDoc, shot({ todos: [addsIt] }), NOW)
+assert.equal(remDoc.todos[0].routine?.extraDates?.includes('2026-06-03'), false)
+assert.equal(remDoc.todos[0].routine?.skipDates?.includes('2026-06-03'), true)
+ok('a day removed on one phone and added on the other stays removed, and the lists stay disjoint')
 
 console.log(`\nAll ${n} routine checks passed ✅`)

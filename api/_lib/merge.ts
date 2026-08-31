@@ -94,7 +94,16 @@ function mergeTodos(a: Todo[], b: Todo[], tombstones: Tombstone[]): Todo[] {
     // The rule is last-write-wins like any other edit, but the days added BY HAND are appended
     // independently on each phone, so they are unioned onto whichever rule won.
     const extraDates = mergeExtraDates(existing.routine?.extraDates, r.routine?.extraDates)
-    const routine = newest.routine ? { ...newest.routine, extraDates } : undefined
+    const skipDates = mergeExtraDates(existing.routine?.skipDates, r.routine?.skipDates)
+    // A day removed on one phone and added on the other: the removal wins, matching occursOn, and
+    // the lists are kept disjoint so the result cannot claim both.
+    const routine = newest.routine
+      ? {
+          ...newest.routine,
+          extraDates: extraDates?.filter((d) => !skipDates?.includes(d)),
+          skipDates,
+        }
+      : undefined
     map.set(r.id, { ...newest, ...(routineLog ? { routineLog } : {}), ...(newest.routine ? { routine } : {}) })
   }
   return dropDeleted([...map.values()], tombstones, 'todos')

@@ -411,6 +411,10 @@ export const ID: Record<string, string> = {
   'Nothing to pick yet.': 'Belum ada apa pun untuk dipilih.',
   'now {date}': 'sekarang {date}',
   'just this day, its repeat stays': 'hanya hari ini, pengulangannya tetap',
+  'Not on this day': 'Tidak di hari ini',
+  'Off for {date}': 'Dilewati untuk {date}',
+  'Everything you have already happens on this day. Remove one with the ⃠ on its row.':
+    'Semua yang kamu punya sudah ada di hari ini. Hapus salah satu dengan ikon ⃠ di barisnya.',
   'Switched off': 'Dimatikan',
   'Switched back on': 'Dinyalakan kembali',
   'Switch on': 'Nyalakan',

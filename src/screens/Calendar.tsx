@@ -13,7 +13,7 @@ import {
   startOfWeek,
 } from 'date-fns'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CalendarPlus, Check, ChevronLeft, ChevronRight, Heart, Plus, Repeat } from 'lucide-react'
+import { CalendarPlus, CalendarX, Check, ChevronLeft, ChevronRight, Heart, Plus, Repeat } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BottomSheet } from '../components/BottomSheet'
@@ -23,7 +23,7 @@ import { PageHeader } from '../components/PageHeader'
 import { RoutineSheet } from '../components/RoutineSheet'
 import { useToast } from '../components/Toast'
 import { useCalendarEvents, useCouple, useTodoGroups, useTodos, type CalendarEvent, type CalendarEventType } from '../db/hooks'
-import { addRoutineDate, addTodo, toggleRoutineOccurrence, updateTodo } from '../db/repo'
+import { addRoutineDate, addTodo, skipRoutineDate, toggleRoutineOccurrence, updateTodo } from '../db/repo'
 import { DAY_REMINDER_HOUR, formatTime } from '../lib/dates'
 import { haptic } from '../lib/haptics'
 import { activeDateLocale, useT } from '../lib/i18n'
@@ -64,6 +64,14 @@ export default function Calendar() {
     selectedKey < monthFrom ? selectedKey : monthFrom,
     selectedKey > monthTo ? selectedKey : monthTo,
   )
+
+  /** Take one occurrence off the calendar. The repeat carries on; only this day stops being expected. */
+  async function removeFromDay(event: CalendarEvent) {
+    if (!event.occurrenceKey) return
+    haptic(6)
+    await skipRoutineDate(event.sourceId, event.occurrenceKey)
+    toast(t('Off for {date}', { date: format(event.at, 'MMM d', { locale }) }), '🚫')
+  }
 
   /** Hand one wishlist item to the phone's own calendar app (a routine goes as one RRULE event). */
   function exportToPhone(sourceId: string) {
@@ -271,6 +279,7 @@ export default function Calendar() {
                   by={activePartner}
                   onOpen={() => navigate(e.route)}
                   onExport={() => exportToPhone(e.sourceId)}
+                  onRemoveFromDay={() => removeFromDay(e)}
                 />
               ) : (
                 <button
@@ -364,7 +373,9 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
       // that already has a date is the rarer, more deliberate act
       .sort((a, b) => (a.dueAt ? 1 : 0) - (b.dueAt ? 1 : 0))
     const routinePicks = list.filter((td) => td.routine && !occursOn(td.routine, dayIso))
-    return { todoPicks, routinePicks, total: todoPicks.length + routinePicks.length }
+    // how many routines are hidden BECAUSE they already land here, so the empty state can say so
+    const alreadyHere = list.filter((td) => td.routine && occursOn(td.routine, dayIso)).length
+    return { todoPicks, routinePicks, alreadyHere, total: todoPicks.length + routinePicks.length }
   }, [todos, query, dayIso])
 
   async function assign(todo: Todo) {
@@ -436,7 +447,13 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
               />
               {pickable.total === 0 ? (
                 <p className="mt-3 px-1 text-sm text-ink-soft">
-                  {query.trim() ? t('Nothing matches that.') : t('Nothing to pick yet.')}
+                  {/* "nothing to pick" reads as broken when the real reason is that every routine
+                      already happens today, which is the normal case for a daily one. */}
+                  {query.trim()
+                    ? t('Nothing matches that.')
+                    : pickable.alreadyHere > 0
+                      ? t('Everything you have already happens on this day. Remove one with the ⃠ on its row.')
+                      : t('Nothing to pick yet.')}
                 </p>
               ) : (
                 <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
@@ -555,11 +572,13 @@ function RoutineRow({
   by,
   onOpen,
   onExport,
+  onRemoveFromDay,
 }: {
   event: CalendarEvent
   by: PartnerKey
   onOpen: () => void
   onExport: () => void
+  onRemoveFromDay: () => void
 }) {
   const t = useT()
   const occurrenceKey = event.occurrenceKey
@@ -607,6 +626,17 @@ function RoutineRow({
         className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft/60 transition active:scale-90 hover:text-coral"
       >
         <CalendarPlus size={16} />
+      </button>
+      {/* Takes this ONE day off the calendar. The repeat itself carries on, which is why this is not
+          the same as deleting the routine (that lives on the routines screen). */}
+      <button
+        type="button"
+        onClick={onRemoveFromDay}
+        aria-label={t('Not on this day')}
+        title={t('Not on this day')}
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft/60 transition active:scale-90 hover:text-coral-deep"
+      >
+        <CalendarX size={16} />
       </button>
     </div>
   )

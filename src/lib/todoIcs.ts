@@ -8,6 +8,7 @@ import {
   normalizeRoutine,
   occurrenceInstant,
   routineExtraDates,
+  routineSkipDates,
   toRRule,
 } from './recurrence'
 import type { Todo } from '../types'
@@ -31,6 +32,7 @@ export function todoIcsInput(todo: Todo): DateIcsInput | null {
       allDay: !routine.time, // a routine with no time of day is an all-day series
       rrule: toRRule(routine, { dateOnlyUntil: !routine.time }),
       rdates: routineExtraDates(routine),
+      exdates: routineSkipDates(routine),
       location,
       description,
       alarmMinutesBefore: 30,

@@ -418,3 +418,20 @@ remembered, picked)` takes the list of groups as an argument, so "remembered id 
 is one line in a unit test and needs no browser at all. Keep the end-to-end test for the wiring it
 can actually prove (the memory surviving a reload and being shared between two screens) and say in
 its header what it deliberately does not cover, so the gap does not look like an oversight later.
+
+## 2026-08-20: A test that dodges the default case can pass while the feature is broken for everyone
+**Context:** The calendar's picker hides a routine that already lands on the day being viewed, which
+is correct: adding it would be a no-op. The default rule for a new routine is "Every day", so a daily
+routine lands on EVERY day and was therefore hidden on every one, and the sheet said "Nothing to pick
+yet" always. The end-to-end test passed because it built a WEEKLY routine specifically to find an off
+day. It was testing the case the code handled, not the case people meet.
+
+**Lesson:** When a feature's behaviour depends on data shape, the test has to use the shape the app
+produces by DEFAULT. Reaching for an unusual setup to make an assertion pass is the moment to stop
+and ask whether the default would pass too.
+
+**How to apply:** Build the fixture the way the UI does, with no options touched, and add the
+unusual shape as an EXTRA case rather than the only one. Two follow-ons here: an exclusion that hides
+everything needs an empty state that explains itself, because "nothing to pick" reads as a bug; and
+guard a click on a control that may not exist, since a Playwright timeout crashes the run and hides
+every other assertion, so a missing button reads as a crash rather than one failed check.

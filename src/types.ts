@@ -114,6 +114,14 @@ export interface Routine {
    * said this day explicitly) but a switched-off routine still shows nothing.
    */
   extraDates?: string[]
+  /**
+   * Days this routine is explicitly skipped (ISO yyyy-mm-dd), removed by hand from the calendar.
+   *
+   * The mirror of `extraDates`, and for the same reason: dropping one Tuesday must not shorten the
+   * rule or renumber anything. A skipped day beats the rule, and the repository keeps the two lists
+   * disjoint, so a day is never both added and skipped.
+   */
+  skipDates?: string[]
 }
 
 /**

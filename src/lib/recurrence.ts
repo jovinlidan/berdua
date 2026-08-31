@@ -156,6 +156,7 @@ export function normalizeRoutine(routine: Routine): Routine {
     // occurrences than `occurrenceKeys` will ever hand back.
     count: routine.count && routine.count > 0 ? Math.min(MAX_OCCURRENCES, Math.floor(routine.count)) : null,
     extraDates: sanitizeExtraDates(routine.extraDates),
+    skipDates: sanitizeExtraDates(routine.skipDates),
   }
 }
 
@@ -184,6 +185,9 @@ export function mergeExtraDates(a: string[] | undefined, b: string[] | undefined
 
 /** The one-off days a routine also happens on, already sanitised. */
 export const routineExtraDates = (routine: Routine): string[] => sanitizeExtraDates(routine.extraDates) ?? []
+
+/** The one-off days a routine is explicitly skipped on, already sanitised. */
+export const routineSkipDates = (routine: Routine): string[] => sanitizeExtraDates(routine.skipDates) ?? []
 
 /** Which weekdays a weekly routine lands on (falls back to the start day's own weekday). */
 export const routineWeekdays = (routine: Routine): number[] =>
@@ -259,6 +263,8 @@ export function occursOn(routine: Routine, key: DayKey): boolean {
   if (pausedFrom(routine, key)) return false
   const r = normalizeRoutine(routine)
   if (!isDayKey(key)) return false
+  // an explicit removal beats everything, including an explicit addition
+  if (routineSkipDates(r).includes(key)) return false
   // an explicitly added day happens even where the rule does not reach
   if (routineExtraDates(r).includes(key)) return true
   if (!isDayKey(r.startDate)) return false
@@ -310,8 +316,11 @@ export function occurrenceKeys(
   const extras = routineExtraDates(r).filter(
     (d) => d >= fromKey && d <= toKey && !(stop !== null && d > stop) && !out.includes(d),
   )
-  if (!extras.length) return out
-  return [...out, ...extras].sort().slice(0, cap)
+  const merged = extras.length ? [...out, ...extras].sort() : out
+  // Removals apply last, so a day taken off the calendar stays off however it got there.
+  const skips = routineSkipDates(r)
+  const kept = skips.length ? merged.filter((d) => !skips.includes(d)) : merged
+  return kept.slice(0, cap)
 }
 
 /** The first occurrence on or after `fromKey`, or null when the routine has run out. */
@@ -329,15 +338,17 @@ export function occurrenceTotal(routine: Routine): number | null {
   // Added days are extra planned days, so a finite plan grows by however many are not already part
   // of the series. Without this, ticking one could report more done than the total.
   const extra = routineExtraDates(r).filter((d) => !inCountedSeries(r, d)).length
-  if (r.count) return r.count + extra
-  if (!r.until || r.until < r.startDate) return r.until ? extra : null
+  // and shrinks by the days removed from it, so `done` and `total` stay comparable
+  const skipped = routineSkipDates(r).filter((d) => inCountedSeries(r, d)).length
+  if (r.count) return Math.max(0, r.count + extra - skipped)
+  if (!r.until || r.until < r.startDate) return r.until ? Math.max(0, extra - skipped) : null
   // Any legal rule repeats at least once a year, so the last occurrence is within 366 days of the
   // end; walking back from there is bounded no matter how long the series is.
   for (let key = r.until, i = 0; i <= 366 && key >= r.startDate; i++, key = addDaysKey(key, -1)) {
     const ordinal = occurrenceOrdinal(r, key)
-    if (ordinal !== null) return ordinal + extra
+    if (ordinal !== null) return Math.max(0, ordinal + extra - skipped)
   }
-  return extra
+  return Math.max(0, extra - skipped)
 }
 
 // ── Per-occurrence ticks ───────────────────────────────────────────────────────
@@ -414,6 +425,8 @@ function inCountedSeries(r: Routine, key: DayKey): boolean {
 
 export function withinLimits(routine: Routine, key: DayKey): boolean {
   const r = normalizeRoutine(routine)
+  // a removed day is outside the plan, so a tick left behind on it stops counting
+  if (routineSkipDates(r).includes(key)) return false
   // an added day is always "within": it was named explicitly, so a tick on it must count
   if (routineExtraDates(r).includes(key)) return true
   return inCountedSeries(r, key)

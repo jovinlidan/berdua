@@ -17,6 +17,7 @@ export interface DateIcsInput {
   alarmMinutesBefore?: number
   rrule?: string // RFC 5545 RRULE body, e.g. 'FREQ=WEEKLY;BYDAY=MO,WE' → a repeating event
   rdates?: string[] // extra one-off days as ISO yyyy-mm-dd, emitted as RDATE beside the RRULE
+  exdates?: string[] // skipped days as ISO yyyy-mm-dd, emitted as EXDATE beside the RRULE
   allDay?: boolean // DATE-valued event (uses the LOCAL calendar day of `start`; no time, no alarm)
   stamp?: number // override DTSTAMP (for deterministic tests)
 }
@@ -65,6 +66,7 @@ export function buildDateIcs(input: DateIcsInput): string {
     // One RDATE line per added day. DATE-valued, matching how an all-day routine states its DTSTART,
     // and only meaningful alongside an RRULE, which is the only way this app emits them.
     ...(input.rdates?.length ? [`RDATE;VALUE=DATE:${input.rdates.map((d) => d.replace(/-/g, '')).join(',')}`] : []),
+    ...(input.exdates?.length ? [`EXDATE;VALUE=DATE:${input.exdates.map((d) => d.replace(/-/g, '')).join(',')}`] : []),
     `SUMMARY:${esc(title)}`,
     ...(location ? [`LOCATION:${esc(location)}`] : []),
     ...(description ? [`DESCRIPTION:${esc(description)}`] : []),

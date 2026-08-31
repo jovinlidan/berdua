@@ -335,9 +335,29 @@ export async function setRoutinePaused(id: string, paused: boolean): Promise<voi
 export async function addRoutineDate(id: string, dayKey: string): Promise<void> {
   const todo = await db.todos.get(id)
   if (!todo?.routine) return
-  const existing = todo.routine.extraDates ?? []
-  if (existing.includes(dayKey)) return
-  await updateTodo(id, { routine: { ...todo.routine, extraDates: [...existing, dayKey].sort() } })
+  const extraDates = [...new Set([...(todo.routine.extraDates ?? []), dayKey])].sort()
+  // adding un-skips: the two lists stay disjoint, so no day is ever both added and removed
+  const skipDates = (todo.routine.skipDates ?? []).filter((d) => d !== dayKey)
+  await updateTodo(id, {
+    routine: { ...todo.routine, extraDates, skipDates: skipDates.length ? skipDates : undefined },
+  })
+}
+
+/**
+ * Not on this one day, without touching the rule.
+ *
+ * The mirror of `addRoutineDate`: it drops a single occurrence off the calendar while the repeat
+ * carries on, so nothing about the rule, the ordinals or the tick history is rewritten.
+ */
+export async function skipRoutineDate(id: string, dayKey: string): Promise<void> {
+  const todo = await db.todos.get(id)
+  if (!todo?.routine) return
+  const skipDates = [...new Set([...(todo.routine.skipDates ?? []), dayKey])].sort()
+  // removing un-adds, so tapping remove on a day you added earlier just takes it back off
+  const extraDates = (todo.routine.extraDates ?? []).filter((d) => d !== dayKey)
+  await updateTodo(id, {
+    routine: { ...todo.routine, skipDates, extraDates: extraDates.length ? extraDates : undefined },
+  })
 }
 
 /** Stop repeating. The tick history stays, so re-enabling the routine brings its streak back. */
