@@ -71,7 +71,7 @@ r.routinePickStillWorks = (await p.locator('body').innerText()).includes('Date n
 
 // and the two "new" modes still create
 await p.locator('button:has-text("Add")').first().click(); await p.waitForTimeout(700)
-await p.locator('[role=dialog] button:has-text("New to-do")').click(); await p.waitForTimeout(500)
+await p.locator('[role=dialog] button:has-text("New wishlist")').click(); await p.waitForTimeout(500)
 await p.locator('[role=dialog] input').first().fill('Fresh task')
 await p.locator('[role=dialog] button:has-text("Add to-do")').click(); await p.waitForTimeout(1300)
 r.newTodoStillWorks = (await p.locator('body').innerText()).includes('Fresh task')

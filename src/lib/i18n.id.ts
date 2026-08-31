@@ -404,7 +404,7 @@ export const ID: Record<string, string> = {
   List: 'Daftar',
   'Add to {date}': 'Tambah ke {date}',
   'Added to {date}': 'Ditambahkan ke {date}',
-  'New to-do': 'To-do baru',
+  'New wishlist': 'Wishlist baru',
   'New routine': 'Rutinitas baru',
   'Pick wishlist': 'Pilih dari wishlist',
   'Pick routine': 'Pilih rutinitas',

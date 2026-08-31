@@ -33,7 +33,7 @@ await p.locator('button:has-text("Add")').first().click(); await p.waitForTimeou
 const sheet = await p.locator('[role=dialog]').innerText()
 r.sheetNamesTheDay = /Add to \w{3}, \w{3} \d+/.test(sheet)
 // all four modes: create either kind, or pick an existing one of either kind
-r.offersAllFourModes = ['New to-do', 'New routine', 'Pick wishlist', 'Pick routine'].every((label) =>
+r.offersAllFourModes = ['New wishlist', 'New routine', 'Pick wishlist', 'Pick routine'].every((label) =>
   sheet.includes(label),
 )
 

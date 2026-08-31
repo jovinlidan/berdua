@@ -433,7 +433,7 @@ function AddToDaySheet({ open, onClose, day }: { open: boolean; onClose: () => v
           {/* four chips do not fit a phone width, so the row scrolls like the category rows do */}
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Chip active={kind === 'todo'} onClick={() => setKind('todo')}>
-              {t('New to-do')}
+              {t('New wishlist')}
             </Chip>
             <Chip active={kind === 'routine'} onClick={() => setKind('routine')}>
               <Repeat size={14} /> {t('New routine')}
