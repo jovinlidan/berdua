@@ -435,3 +435,36 @@ unusual shape as an EXTRA case rather than the only one. Two follow-ons here: an
 everything needs an empty state that explains itself, because "nothing to pick" reads as a bug; and
 guard a click on a control that may not exist, since a Playwright timeout crashes the run and hides
 every other assertion, so a missing button reads as a crash rather than one failed check.
+
+## 2026-08-20: Profiling the dev build measures React's debug machinery, not the app
+**Context:** The calendar felt worth optimising, and a throttled trace agreed: stepping a month cost
+about 500ms, almost all of it FunctionCall. Two rounds of tuning barely moved it, so the next step
+was a CPU profile with real attribution, and the top frames were `jsxDEV` and an unminified
+`react.js`. Every measurement so far had been against `pnpm dev`: unbundled ES modules, per-element
+dev validation, and StrictMode rendering everything twice. Rebuilding and serving `dist` put the
+same interaction at 143ms with FunctionCall at 73 rather than 258.
+
+**Lesson:** A dev-server profile overstates JS work by roughly 3 to 4x and, worse, changes WHICH
+phase dominates. It said scripting; production says raster and paint. Optimising against it means
+tuning code that the shipped bundle never runs.
+
+**How to apply:** `pnpm build` and serve `dist` before believing any interaction cost, the same way
+the server needs gzip before believing any transfer cost. Both traps have now cost time in this
+repo. Keep the dev server for FUNCTIONAL tests, where it is fine, and never for a number that will
+justify a change. Then confirm the change earns its place by measuring it in production too: the
+window narrowing here was worth 163ms to 141ms, real but a fifth of what the dev numbers implied.
+
+## 2026-08-20: A test that clicks a calendar day passes or fails by what today's date is
+**Context:** `test-routine-switch` started failing on the 1st of the month. It ticks "three days
+ago" by clicking `[data-day=...]`, and the grid only draws six weeks around the cursor month: with
+today on the 1st, the grid starts the day before yesterday, so three days ago was never rendered.
+Nothing had changed in the app; the calendar simply rolled over. Seven test files shared the flaw.
+
+**Lesson:** Any fixture built from an offset against `new Date()` is a time bomb unless the thing it
+addresses is guaranteed to exist for every possible today. A grid of six weeks around a month is
+exactly the kind of view where that guarantee does not hold.
+
+**How to apply:** Go through a helper that steps the view until the target day is on screen, and
+throw with the missing key if it never arrives, rather than leaving a bare 30-second Playwright
+timeout that says nothing about why. The same reasoning applies to any "N days from now" fixture
+near a month, week or year boundary.

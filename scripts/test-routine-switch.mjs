@@ -12,6 +12,29 @@
 // Needs `pnpm dev`. Run: BASE=http://localhost:5173 node scripts/test-routine-switch.mjs
 import { chromium } from 'playwright'
 
+/**
+ * Click a day cell by its key, stepping the month view when that day is not on the current grid.
+ *
+ * The grid draws six weeks around the cursor month, so a day a few either side of today can fall
+ * outside it depending where today sits in its month. Clicking `[data-day=...]` directly made these
+ * tests pass or fail by calendar date: run on the 1st, "three days ago" is off the grid entirely.
+ */
+async function pickDay(page, key) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const cell = page.locator(`[data-day="${key}"]`)
+    if (await cell.count()) {
+      await cell.click()
+      await page.waitForTimeout(650)
+      return
+    }
+    const shown = await page.locator('[data-day]').evaluateAll((els) => els.map((e) => e.dataset.day))
+    await page.locator(`[aria-label="${key < shown[0] ? 'Previous month' : 'Next month'}"]`).click()
+    await page.waitForTimeout(650)
+  }
+  throw new Error(`day ${key} never appeared on the calendar grid`)
+}
+
+
 const base = process.env.BASE || 'http://localhost:5173'
 // CHROME_PATH lets a sandbox point at an already-installed Chromium (Playwright pins one build).
 const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})
@@ -94,13 +117,13 @@ res.countSurvivesSwitchingOff = /3 done/.test(await rowFor('Morning walk').inner
 await page.goto(`${base}/calendar`, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(1600)
 // today is on or after the pause day, so it stops being expected
-await page.locator(`[data-day="${dayKey(0)}"]`).click()
+await pickDay(page, dayKey(0))
 await page.waitForTimeout(800)
 let dayText = await page.locator('body').innerText()
 res.goneFromTodayOnTheCalendar = !dayText.includes('Morning walk')
 res.otherRoutineUnaffected = dayText.includes('Cook together')
 // but the days it already happened on keep their place, ticks and all
-await page.locator(`[data-day="${dayKey(-3)}"]`).click()
+await pickDay(page, dayKey(-3))
 await page.waitForTimeout(800)
 res.pastDaysKeepTheirPlace = (await page.locator('body').innerText()).includes('Morning walk')
 
@@ -113,7 +136,7 @@ res.backOn = (await rowFor('Morning walk').locator('[role="switch"]').getAttribu
 res.countStillThere = /3 done/.test(await rowFor('Morning walk').innerText())
 await page.goto(`${base}/calendar`, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(1600)
-await page.locator(`[data-day="${dayKey(0)}"]`).click()
+await pickDay(page, dayKey(0))
 await page.waitForTimeout(800)
 res.returnsToTheCalendar = (await page.locator('body').innerText()).includes('Morning walk')
 

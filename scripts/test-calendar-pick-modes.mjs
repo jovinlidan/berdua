@@ -9,6 +9,29 @@
 // Needs `pnpm dev`. Run: BASE=http://localhost:5173 node scripts/test-calendar-pick-modes.mjs
 import { chromium } from 'playwright'
 
+/**
+ * Click a day cell by its key, stepping the month view when that day is not on the current grid.
+ *
+ * The grid draws six weeks around the cursor month, so a day a few either side of today can fall
+ * outside it depending where today sits in its month. Clicking `[data-day=...]` directly made these
+ * tests pass or fail by calendar date: run on the 1st, "three days ago" is off the grid entirely.
+ */
+async function pickDay(page, key) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const cell = page.locator(`[data-day="${key}"]`)
+    if (await cell.count()) {
+      await cell.click()
+      await page.waitForTimeout(650)
+      return
+    }
+    const shown = await page.locator('[data-day]').evaluateAll((els) => els.map((e) => e.dataset.day))
+    await page.locator(`[aria-label="${key < shown[0] ? 'Previous month' : 'Next month'}"]`).click()
+    await page.waitForTimeout(650)
+  }
+  throw new Error(`day ${key} never appeared on the calendar grid`)
+}
+
+
 const base = process.env.BASE || 'http://localhost:5173'
 // CHROME_PATH lets a sandbox point at an already-installed Chromium (Playwright pins one build).
 const b = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})
@@ -37,7 +60,7 @@ await p.click('[aria-label="Add routine"]'); await p.waitForTimeout(900)
 
 const r = {}
 await p.goto(`${base}/calendar`, { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(1600)
-await p.locator(`[data-day="${dk(3)}"]`).click(); await p.waitForTimeout(700)
+await pickDay(p, dk(3))
 await p.locator('button:has-text("Add")').first().click(); await p.waitForTimeout(800)
 // scope to the MODE row: `button.chip` also matches the category chips further down the sheet
 const modeRow = p.locator('[role=dialog] div.overflow-x-auto').first()

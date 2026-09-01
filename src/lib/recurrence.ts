@@ -51,8 +51,33 @@ interface Ymd {
 /** Days in a 1-based month (day 0 of the next month == the last day of this one). */
 export const daysInMonth = (y: number, m: number): number => new Date(Date.UTC(y, m, 0)).getUTCDate()
 
+/**
+ * Parsed day keys, memoized.
+ *
+ * Expansion walks a window day by day, and each day asks several questions that each re-parse the
+ * key: `hits` calls `daysBetween` or `weekdayOf`, the loop calls `addDaysKey`, `occurrenceOrdinal`
+ * parses again. Over a six-week grid times a handful of routines that is thousands of runs of the
+ * regex below, on a small set of repeated strings. Bounded so a long-lived tab cannot grow it
+ * without limit; days are asked for in runs, so clearing wholesale costs one re-parse each.
+ */
+const KEY_CACHE_LIMIT = 4096
+const keyCache = new Map<string, Ymd | null>()
+
 function parseKey(key: string | undefined): Ymd | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key ?? '')
+  if (key === undefined) return null
+  const hit = keyCache.get(key)
+  if (hit !== undefined) return hit
+  // frozen: the same object is handed to every caller, and every one of them only reads y/m/d.
+  // If that ever stops being true this throws instead of quietly corrupting every later date.
+  const parsed = parseKeyUncached(key)
+  if (parsed) Object.freeze(parsed)
+  if (keyCache.size >= KEY_CACHE_LIMIT) keyCache.clear()
+  keyCache.set(key, parsed)
+  return parsed
+}
+
+function parseKeyUncached(key: string): Ymd | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key)
   if (!match) return null
   const y = Number(match[1])
   const m = Number(match[2])

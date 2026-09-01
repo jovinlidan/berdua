@@ -3,7 +3,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { todayIso } from '../lib/dates'
 import {
-  addDaysKey,
   isOccurrenceDone,
   localOccurrenceInstant,
   nextOccurrenceKey,
@@ -11,7 +10,7 @@ import {
   occursOn,
   withinLimits,
 } from '../lib/recurrence'
-import type { Todo } from '../types'
+import type { SealedNote, Todo } from '../types'
 import { db } from './database'
 import { COUPLE_ID } from './repo'
 
@@ -122,52 +121,74 @@ export interface CalendarEvent {
  * are expanded on read and bounded by that window, so a repeating activity lands on all of its days
  * without ever storing a row per day. The recurring anniversary is handled in the Calendar screen.
  */
-export const useCalendarEvents = (fromKey?: string, toKey?: string) =>
-  useLiveQuery<CalendarEvent[]>(async () => {
-    const today = todayIso()
-    const from = fromKey ?? addDaysKey(today, -62)
-    const to = toKey ?? addDaysKey(today, 366)
+/**
+ * Everything the calendar can draw, fetched once.
+ *
+ * Deliberately takes NO window. It used to, which meant stepping a month changed the query's
+ * arguments and re-ran the whole thing: a fresh read of every to-do out of IndexedDB and a fresh
+ * Dexie subscription, just to look at days that were mostly already expanded. Now the fetch re-runs
+ * only when the data actually changes, and moving around the calendar is pure work over what is
+ * already in memory (see `calendarEventsIn`).
+ */
+export const useCalendarSources = () =>
+  useLiveQuery(async () => {
     const [todos, capsules] = await Promise.all([db.todos.toArray(), db.sealedNotes.toArray()])
-    const events: CalendarEvent[] = []
-    for (const t of todos) {
-      if (t.routine) {
-        for (const day of occurrenceKeys(t.routine, from, to)) {
-          events.push({
-            id: `${t.id}#${day}`,
-            sourceId: t.id,
-            type: 'routine',
-            at: localOccurrenceInstant(day, t.routine.time),
-            title: t.title,
-            subtitle: t.note,
-            done: isOccurrenceDone(t, day),
-            allDay: !t.routine.time,
-            occurrenceKey: day,
-            route: '/routines',
-          })
-        }
-        continue
+    return { todos, capsules }
+  }, [])
+
+/**
+ * The events falling in `[fromKey, toKey]`. Pure, so a caller can memoize it against the window it
+ * is actually showing rather than paying for a database round trip per month.
+ *
+ * Only routines are windowed: they are expanded per day, so the range decides how much work this is.
+ * A dated to-do and a capsule are single points already, so they are cheap to hand over whole.
+ */
+export function calendarEventsIn(
+  sources: { todos: Todo[]; capsules: SealedNote[] } | undefined,
+  fromKey: string,
+  toKey: string,
+): CalendarEvent[] {
+  if (!sources) return []
+  const events: CalendarEvent[] = []
+  for (const t of sources.todos) {
+    if (t.routine) {
+      for (const day of occurrenceKeys(t.routine, fromKey, toKey)) {
+        events.push({
+          id: `${t.id}#${day}`,
+          sourceId: t.id,
+          type: 'routine',
+          at: localOccurrenceInstant(day, t.routine.time),
+          title: t.title,
+          subtitle: t.note,
+          done: isOccurrenceDone(t, day),
+          allDay: !t.routine.time,
+          occurrenceKey: day,
+          route: '/routines',
+        })
       }
-      if (!t.dueAt) continue
-      events.push({
-        id: t.id,
-        sourceId: t.id,
-        type: 'todo',
-        at: t.dueAt,
-        title: t.title,
-        subtitle: t.note,
-        done: t.done,
-        route: '/todos',
-      })
+      continue
     }
-    for (const c of capsules) {
-      events.push({
-        id: c.id,
-        sourceId: c.id,
-        type: 'capsule',
-        at: c.unlockAt,
-        title: c.title || 'Time capsule',
-        route: '/capsule',
-      })
-    }
-    return events
-  }, [fromKey, toKey])
+    if (!t.dueAt) continue
+    events.push({
+      id: t.id,
+      sourceId: t.id,
+      type: 'todo',
+      at: t.dueAt,
+      title: t.title,
+      subtitle: t.note,
+      done: t.done,
+      route: '/todos',
+    })
+  }
+  for (const c of sources.capsules) {
+    events.push({
+      id: c.id,
+      sourceId: c.id,
+      type: 'capsule',
+      at: c.unlockAt,
+      title: c.title || 'Time capsule',
+      route: '/capsule',
+    })
+  }
+  return events
+}

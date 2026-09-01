@@ -22,7 +22,15 @@ import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 import { RoutineSheet } from '../components/RoutineSheet'
 import { useToast } from '../components/Toast'
-import { useCalendarEvents, useCouple, useTodoGroups, useTodos, type CalendarEvent, type CalendarEventType } from '../db/hooks'
+import {
+  calendarEventsIn,
+  useCalendarSources,
+  useCouple,
+  useTodoGroups,
+  useTodos,
+  type CalendarEvent,
+  type CalendarEventType,
+} from '../db/hooks'
 import { addRoutineDate, addTodo, skipRoutineDate, toggleRoutineOccurrence, updateTodo } from '../db/repo'
 import { DAY_REMINDER_HOUR, formatTime } from '../lib/dates'
 import { haptic } from '../lib/haptics'
@@ -54,16 +62,23 @@ export default function Calendar() {
   const [selected, setSelected] = useState(() => new Date())
   const [adding, setAdding] = useState(false)
 
-  // Routines are expanded per day on read, so the query is bounded to the visible month plus a
-  // month of slack either side. The selected day is folded in as well: stepping the cursor two
-  // months away used to leave it outside the window, and its detail panel went blank.
-  const monthFrom = dayKey(addMonths(startOfWeek(startOfMonth(cursor)), -1))
-  const monthTo = dayKey(addMonths(endOfWeek(endOfMonth(cursor)), 1))
+  // Routines are expanded per DAY, so the window decides how much work this is: it is exactly the
+  // grid being drawn, six weeks, with the selected day folded in (stepping the cursor two months
+  // away used to leave it outside the window and blank its detail panel).
+  //
+  // It used to reach a month further either side. That slack was pure cost: the window is an input
+  // to the derivation, so every month step recomputed it anyway, and the extra days were never
+  // drawn. Roughly 100 days of expansion per routine became about 42.
+  const gridFrom = dayKey(startOfWeek(startOfMonth(cursor)))
+  const gridTo = dayKey(endOfWeek(endOfMonth(cursor)))
   const selectedKey = dayKey(selected)
-  const events = useCalendarEvents(
-    selectedKey < monthFrom ? selectedKey : monthFrom,
-    selectedKey > monthTo ? selectedKey : monthTo,
-  )
+  const sources = useCalendarSources()
+  // The window is resolved FIRST, so tapping a day inside the grid leaves it unchanged and the memo
+  // below holds. Depending on `selectedKey` directly re-expanded every routine on every day tap,
+  // for a window that had not moved.
+  const from = selectedKey < gridFrom ? selectedKey : gridFrom
+  const to = selectedKey > gridTo ? selectedKey : gridTo
+  const events = useMemo(() => calendarEventsIn(sources, from, to), [sources, from, to])
 
   /** Take one occurrence off the calendar. The repeat carries on; only this day stops being expected. */
   async function removeFromDay(event: CalendarEvent) {

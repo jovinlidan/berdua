@@ -4,6 +4,29 @@
 // Needs `pnpm dev`. Run: BASE=http://localhost:5173 node scripts/test-routine-e2e.mjs
 import { chromium } from 'playwright'
 
+/**
+ * Click a day cell by its key, stepping the month view when that day is not on the current grid.
+ *
+ * The grid draws six weeks around the cursor month, so a day a few either side of today can fall
+ * outside it depending where today sits in its month. Clicking `[data-day=...]` directly made these
+ * tests pass or fail by calendar date: run on the 1st, "three days ago" is off the grid entirely.
+ */
+async function pickDay(page, key) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const cell = page.locator(`[data-day="${key}"]`)
+    if (await cell.count()) {
+      await cell.click()
+      await page.waitForTimeout(650)
+      return
+    }
+    const shown = await page.locator('[data-day]').evaluateAll((els) => els.map((e) => e.dataset.day))
+    await page.locator(`[aria-label="${key < shown[0] ? 'Previous month' : 'Next month'}"]`).click()
+    await page.waitForTimeout(650)
+  }
+  throw new Error(`day ${key} never appeared on the calendar grid`)
+}
+
+
 const base = process.env.BASE || 'http://localhost:5173'
 const CODE = `routine-${Date.now()}`
 // CHROME_PATH lets a sandbox point at an already-installed Chromium (Playwright pins one build).
@@ -90,7 +113,7 @@ await A.waitForTimeout(900)
 results.calendarShowsToday = (await A.locator('text=Routine').count()) > 0
 results.calendarTodayTicked = (await A.locator('[aria-label="Mark not done"]').count()) > 0
 // the routine is on, so it is expected today and on the days around it
-await A.click(`[data-day="${iso(-1)}"]`)
+await pickDay(A, iso(-1))
 await A.waitForTimeout(500)
 results.calendarShowsYesterday = (await A.locator('[aria-label="Mark done"]').count()) > 0
 await A.waitForTimeout(2500) // let A's dirty POST reach the server
@@ -106,7 +129,7 @@ await B.goto(`${base}/calendar`, { waitUntil: 'domcontentloaded' })
 await B.waitForTimeout(900)
 // A's tick is visible to B on the day it was made, which is where ticks live now
 results.bSeesPartnersTick = (await B.locator('[aria-label="Mark not done"]').count()) > 0
-await B.click(`[data-day="${iso(-1)}"]`)
+await pickDay(B, iso(-1))
 await B.waitForTimeout(500)
 await B.click('[aria-label="Mark done"]')
 await B.waitForTimeout(600)

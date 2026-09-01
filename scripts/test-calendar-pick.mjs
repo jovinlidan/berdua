@@ -12,6 +12,29 @@
 // Needs `pnpm dev`. Run: BASE=http://localhost:5173 node scripts/test-calendar-pick.mjs
 import { chromium } from 'playwright'
 
+/**
+ * Click a day cell by its key, stepping the month view when that day is not on the current grid.
+ *
+ * The grid draws six weeks around the cursor month, so a day a few either side of today can fall
+ * outside it depending where today sits in its month. Clicking `[data-day=...]` directly made these
+ * tests pass or fail by calendar date: run on the 1st, "three days ago" is off the grid entirely.
+ */
+async function pickDay(page, key) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const cell = page.locator(`[data-day="${key}"]`)
+    if (await cell.count()) {
+      await cell.click()
+      await page.waitForTimeout(650)
+      return
+    }
+    const shown = await page.locator('[data-day]').evaluateAll((els) => els.map((e) => e.dataset.day))
+    await page.locator(`[aria-label="${key < shown[0] ? 'Previous month' : 'Next month'}"]`).click()
+    await page.waitForTimeout(650)
+  }
+  throw new Error(`day ${key} never appeared on the calendar grid`)
+}
+
+
 const base = process.env.BASE || 'http://localhost:5173'
 // CHROME_PATH lets a sandbox point at an already-installed Chromium (Playwright pins one build).
 const b = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})
@@ -56,7 +79,7 @@ await p.click('[aria-label="Add routine"]'); await p.waitForTimeout(800)
 // open the calendar sheet on a day 4 out and pick an existing to-do
 const target = dk(4)
 await p.goto(`${base}/calendar`, { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(1700)
-await p.locator(`[data-day="${target}"]`).click(); await p.waitForTimeout(600)
+await pickDay(p, target)
 await p.locator('button:has-text("Add")').first().click(); await p.waitForTimeout(800)
 // the two pickers are separate modes, so each is opened by its own chip
 r.bothPickChipsPresent =
@@ -90,7 +113,7 @@ r.appearsOnThatDay = (await p.locator('body').innerText()).includes('Book the ca
 
 // a to-do that already has a date shows it, and picking again MOVES it
 const later = dk(9)
-await p.locator(`[data-day="${later}"]`).click(); await p.waitForTimeout(600)
+await pickDay(p, later)
 await p.locator('button:has-text("Add")').first().click(); await p.waitForTimeout(700)
 await p.locator('[role=dialog] button:has-text("Pick wishlist")').click(); await p.waitForTimeout(600)
 r.showsCurrentDateOnDatedOnes = /now \w{3}, \w{3} \d+/.test(await p.locator('[role=dialog]').innerText())
@@ -116,7 +139,7 @@ await p.waitForTimeout(900)
 const offDay = dk(3)
 await p.goto(`${base}/calendar`, { waitUntil: 'domcontentloaded' })
 await p.waitForTimeout(1700)
-await p.locator(`[data-day="${offDay}"]`).click()
+await pickDay(p, offDay)
 await p.waitForTimeout(700)
 r.offDayHasNoDateNight = !(await p.locator('body').innerText()).includes('Date night')
 await p.locator('button:has-text("Add")').first().click()
